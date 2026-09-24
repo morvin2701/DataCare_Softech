@@ -14,4 +14,4 @@ Thumbs.db
 .vercel/
 
 # deployment package (contains server/.env)
-DataCareInvoice-server.zip
+DataCareInvoice-*.zip
