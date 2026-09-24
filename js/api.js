@@ -84,6 +84,7 @@ const API = {
   health() { return this._json('GET', '/health'); },
 
   /* ---- users (admin) ---- */
+  contacts() { return this._json('GET', '/contacts'); },
   users() { return this._json('GET', '/users'); },
   createUser(u) { return this._json('POST', '/users', u); },
   updateUser(id, u) { return this._json('PUT', '/users/' + id, u); },

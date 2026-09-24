@@ -282,9 +282,9 @@ table.list .nowrap { white-space: nowrap; }
 .switch input:checked + .track::after { left: 18px; }
 .switch input:focus-visible + .track { outline: 2px solid #f6c29d; }
 .img-card { display: flex; gap: 14px; border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafbfc; }
-.img-prev { width: 120px; height: 84px; flex: none; border-radius: 8px; background: #fff repeating-conic-gradient(#f1f3f7 0 25%, #fff 0 50%) 0 0 / 16px 16px; border: 1px solid var(--border); display: grid; place-items: center; overflow: hidden; }
+.img-prev { position: relative; width: 120px; height: 84px; flex: none; border-radius: 8px; background: #fff repeating-conic-gradient(#f1f3f7 0 25%, #fff 0 50%) 0 0 / 16px 16px; border: 1px solid var(--border); display: grid; place-items: center; overflow: hidden; }
 .img-prev.tall { height: 120px; }
-.img-prev img { width: 100%; height: 100%; object-fit: contain; padding: 6px; box-sizing: border-box; }
+.img-prev img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; }
 .img-prev .ph { color: var(--muted); font-size: 12px; }
 .img-meta b { display: block; font-size: 13.5px; }
 .img-meta p { margin: 3px 0 10px; color: var(--muted); font-size: 12.5px; }
@@ -303,6 +303,12 @@ table.list .nowrap { white-space: nowrap; }
 .branch-head small { color: var(--muted); font-size: 12px; }
 .branch-head code, .tokens code, .sect-head code { background: #eef0f4; border-radius: 4px; padding: 1px 5px; font-size: 12px; }
 .branch-card .grid2 { gap: 12px 14px; }
+#c2Wrap label.f { font-size: 12.5px; font-weight: 500; color: #3b4354; gap: 5px; }
+#c2Wrap select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13.5px; background: #fff; width: 100%; }
+.c2-preview { margin-top: 14px; font-size: 12.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.c2-chip { display: inline-flex; gap: 6px; background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; color: var(--text); font-size: 13px; }
+.c2-chip b { text-transform: uppercase; letter-spacing: .6px; font-size: 11.5px; color: var(--brand-dark); }
+.c2-preview small { width: 100%; color: #8a6400; }
 .num-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
 .num-preview > div { background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted); }
 .num-preview small { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; font-weight: 600; margin-bottom: 4px; }

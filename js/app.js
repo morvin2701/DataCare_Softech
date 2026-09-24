@@ -926,6 +926,55 @@ function numberingPreview(type) {
   return `UAE: <b>${esc(ex('UAE'))}</b> &nbsp;·&nbsp; India: <b>${esc(ex('IN'))}</b>`;
 }
 
+/* ----- second number on the document header ----- */
+let teamContacts = null;   // [{ name, phone, region }] from the server; null = not loaded yet
+const digitsOf = p => String(p || '').replace(/\D/g, '');
+
+function contactCandidates() {
+  const first = REGION ? S.branches[REGION].phone : '';
+  const seen = new Set([digitsOf(first)]);
+  const list = [];
+  const add = (phone, name) => { const k = digitsOf(phone); if (!k || seen.has(k)) return; seen.add(k); list.push({ phone, name }); };
+  for (const r of ['UAE', 'IN']) add(SB(r).branches[r].phone, `${regionName(r)} office`);
+  (teamContacts || []).forEach(c => add(c.phone, c.name));
+  return list;
+}
+
+function secondNumberHTML() {
+  const cands = contactCandidates();
+  const current = (S.headerContact2 && S.headerContact2.phone) || S.branches[REGION === 'IN' ? 'UAE' : 'IN'].phone;
+  const match = cands.find(c => digitsOf(c.phone) === digitsOf(current));
+  const custom = !match;
+  const groups = ['UAE', 'IN', null].map(reg => {
+    const items = cands.filter(c => phoneRegion(c.phone) === reg);
+    if (!items.length) return '';
+    const title = reg ? `${regionName(reg)} numbers` : 'Other numbers';
+    return `<optgroup label="${title}">${items.map(c => `<option value="${esc(c.phone)}"${match === c ? ' selected' : ''}>${esc(c.phone)} – ${esc(c.name)}</option>`).join('')}</optgroup>`;
+  }).join('');
+  return `
+    <div class="branch-head"><span class="chip">Second number</span><small>${REGION ? 'Printed on the header next to your branch number' : 'Printed on the header next to the issuing branch number'}</small></div>
+    <label class="f">Number
+      <select id="c2Sel">${groups}<option value="__custom"${custom ? ' selected' : ''}>Type another number…</option></select>
+    </label>
+    <label class="f" id="c2CustomWrap" style="margin-top:12px"${custom ? '' : ' hidden'}>Number with country code
+      <input id="c2Custom" type="tel" placeholder="+971 55 … or +91 …" value="${custom ? esc(current) : ''}">
+    </label>
+    <div class="c2-preview">${c2PreviewHTML(current)}</div>`;
+}
+
+function c2PreviewHTML(phone) {
+  const r = phoneRegion(phone);
+  const label = r ? S.branches[r].label : '';
+  return `Header shows:
+      <span class="c2-chip"><b>${esc(label || '?')}</b> ${esc(phone)}</span>
+      ${label ? '' : '<small>Add +971 or +91 at the start so the label shows UAE or India.</small>'}`;
+}
+
+function refreshSecondNumber() {
+  const wrap = $('#c2Wrap');
+  if (wrap) wrap.innerHTML = secondNumberHTML();
+}
+
 function presetRowsHTML() {
   return S.presets.map((p, i) => `
     <tr>
@@ -957,14 +1006,7 @@ function settingsHTML() {
     </div>`;
   const branch = (k) => {
     const name = k === 'IN' ? 'India' : 'UAE';
-    if (REGION && k !== REGION) return `
-      <div class="branch-card">
-        <div class="branch-head"><span class="chip">${name}</span><small>Other office – shown on the header next to yours</small></div>
-        <div class="grid2">
-          ${field('Label on header', inp(`branches.${k}.label`, 'placeholder="e.g. INDIA OFFICE"'))}
-          ${field('Phone', inp(`branches.${k}.phone`, 'type="tel"'))}
-        </div>
-      </div>`;
+    if (REGION && k !== REGION) return `<div class="branch-card" id="c2Wrap">${secondNumberHTML()}</div>`;
     return `
       <div class="branch-card">
         <div class="branch-head"><span class="chip">${name}</span><small>${REGION ? 'Your branch – ' : ''}code <code>${k}</code> is used in document numbers</small></div>
@@ -1021,6 +1063,7 @@ function settingsHTML() {
 
       ${sect('branches', 'Branches', 'Each document is issued from one branch. The branch sets the currency, tax and which phone number comes first.', `
         <div class="grid2 tight">${branch('UAE')}${branch('IN')}</div>
+        ${REGION ? '' : `<div class="branch-card" id="c2Wrap" style="margin-top:14px">${secondNumberHTML()}</div>`}
       `)}
 
       ${sect('defaults', 'Document defaults', 'Pre-filled on every new document. You can still change them per document.', `
@@ -1174,6 +1217,23 @@ function bindSettings() {
     if (k === 'template') $('#tplSel').value = v;
     settingsChanged();
   });
+  p.addEventListener('change', e => {
+    if (e.target.id !== 'c2Sel') return;
+    if (e.target.value === '__custom') {
+      $('#c2CustomWrap').hidden = false;
+      $('#c2Custom').focus();
+      return;
+    }
+    S.headerContact2 = { phone: e.target.value };
+    refreshSecondNumber();
+    settingsChanged('Header number updated');
+  });
+  p.addEventListener('input', e => {
+    if (e.target.id !== 'c2Custom') return;
+    S.headerContact2 = { phone: e.target.value.trim() };
+    $('.c2-preview', p).innerHTML = c2PreviewHTML(e.target.value.trim());
+    settingsChanged();
+  });
   p.addEventListener('change', async e => {
     const key = e.target.dataset.img;
     if (!key || !e.target.files[0]) return;
@@ -1279,7 +1339,12 @@ function showView(v) {
   $$('.tb-nav button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   if (v === 'docs') renderDocs();
-  if (v === 'settings') loadSettingsForm();
+  if (v === 'settings') {
+    loadSettingsForm();
+    if (teamContacts === null && API.online && USER) {
+      API.contacts().then(list => { teamContacts = list; }).catch(() => { teamContacts = []; }).then(refreshSecondNumber);
+    }
+  }
   if (v === 'team') renderTeam();
   $$('#userDropdown').forEach(m => { m.hidden = true; });
   if (v === 'editor') { refreshAutoNumber(); loadForm(); renderPreview(); $('#tplSel').value = S.template; }

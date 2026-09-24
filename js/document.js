@@ -32,6 +32,27 @@ const DECOR_BOTTOM = svgImg('decor-bottom', 794, 200, `
   <polyline points="830,36 730,110 830,184" fill="none" stroke="#F28C28" stroke-width="40"/>
   <polyline points="830,68 772,110 830,152" fill="none" stroke="#8CC4EA" stroke-width="2"/>`);
 
+/** 'UAE' for +971 numbers, 'IN' for +91 numbers, otherwise null. */
+function phoneRegion(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  if (d.startsWith('971')) return 'UAE';
+  if (d.startsWith('91')) return 'IN';
+  return null;
+}
+
+/** The two numbers printed on the header: the issuing branch's, then the chosen second number.
+    The second number's label follows its country code, so two UAE numbers both read "UAE". */
+function headerContacts(d, S) {
+  const own = S.branches[d.branch];
+  const otherBr = d.branch === 'UAE' ? 'IN' : 'UAE';
+  const phone2 = (S.headerContact2 && S.headerContact2.phone) || S.branches[otherBr].phone;
+  const r2 = phoneRegion(phone2);
+  return [
+    { label: own.label, phone: own.phone },
+    { label: r2 ? S.branches[r2].label : S.branches[otherBr].label, phone: phone2 }
+  ];
+}
+
 function docTotals(d) {
   const sub = round2(d.items.reduce((s, it) => s + (Number(it.amount) || 0), 0));
   const disc = Math.min(round2(d.discount), sub);
@@ -51,8 +72,7 @@ function checkbox(on) {
 }
 
 function headerHTML(d, S) {
-  const own = S.branches[d.branch];
-  const other = S.branches[d.branch === 'UAE' ? 'IN' : 'UAE'];
+  const [own, other] = headerContacts(d, S);
   const contact = b => `<div class="ct">${PIN_SVG}<div><b>${esc(b.label)}</b><br><b>${esc(b.phone)}</b></div></div>`;
   const full = S.logo && S.logoHasName;
   const mark = S.logo ? `<img class="mark-img" src="${S.logo}" alt="">` : LOGO_MARK_SVG;

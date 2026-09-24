@@ -130,6 +130,11 @@ app.post('/api/auth/password', requireUser, wrap(async (req, res) => {
   res.json({ ok: true, token: r.token });
 }));
 
+/* ---------- phone numbers of active team members (for the header number picker) ---------- */
+app.get('/api/contacts', requireUser, wrap(async (req, res) => {
+  res.json((await db.listUsers()).filter(u => u.active && u.phone).map(u => ({ name: u.displayName, phone: u.phone, region: u.region })));
+}));
+
 /* ---------- users (admin) ---------- */
 app.get('/api/users', requireUser, requireAdmin, wrap(async (req, res) => res.json(await db.listUsers())));
 

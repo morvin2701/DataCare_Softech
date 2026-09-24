@@ -60,6 +60,7 @@ const DEFAULT_SETTINGS = {
     IN:  { label: 'INDIA', phone: '+91 87581 11027', address: 'Ahmedabad, Gujarat, India', currency: 'INR', taxLabel: 'GST', taxRate: 18, taxId: '' }
   },
   preparedBy: 'Shreyash Thumar',
+  headerContact2: { phone: '' },   // second number on the header; '' = the other branch's office number
   amcPercent: 10,
   numbering: { quotation: 'DC-{BR}-QT-{YYYY}-{SEQ}', invoice: 'DC-{BR}-INV-{YYYY}-{SEQ}', pad: 4 },
   counters: { 'quotation-UAE': 1, 'quotation-IN': 1, 'invoice-UAE': 1, 'invoice-IN': 1 },

@@ -50,8 +50,7 @@ function premiumHeader(d, S, first) {
     return `${P_STRIP_TOP}<div class="p-head small">${brand}
       <div class="p-doc-s"><b>${title}</b><span>${esc(d.number)}</span></div></div>`;
   }
-  const own = S.branches[d.branch];
-  const other = S.branches[d.branch === 'UAE' ? 'IN' : 'UAE'];
+  const [own, other] = headerContacts(d, S);
   const ct = (icon, label, value) => value
     ? `<div class="p-ct">${icon}<div><small>${esc(label)}</small><b>${esc(value)}</b></div></div>` : '';
   const paid = isInv && d.status === 'Paid' ? '<div class="p-paid">Paid</div>' : '';
