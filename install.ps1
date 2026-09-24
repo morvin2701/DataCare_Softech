@@ -1,6 +1,6 @@
-#Requires -RunAsAdministrator
+﻿#Requires -RunAsAdministrator
 <#
-  DataCare Softech – Invoice & Quotation : Windows server installer
+  DataCare Softech - Invoice & Quotation : Windows server installer
 
   Run from an elevated PowerShell (Run as Administrator) inside the copied folder:
 
@@ -56,7 +56,7 @@ if ((Resolve-Path $src).Path.TrimEnd('\') -ne (Resolve-Path $InstallPath).Path.T
 $envFile = Join-Path $serverDir ".env"
 if (-not (Test-Path $envFile)) {
   Copy-Item (Join-Path $serverDir ".env.example") $envFile
-  Write-Warning "server\.env was missing – created from .env.example. Fill in DB_SERVER / DB_USER / DB_PASSWORD in $envFile and run this script again."
+  Write-Warning "server\.env was missing - created from .env.example. Fill in DB_SERVER / DB_USER / DB_PASSWORD in $envFile and run this script again."
   exit 1
 }
 
@@ -81,7 +81,7 @@ if ($busy) {
 Step "Node.js"
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
-  Write-Host "Node.js not found – installing Node.js 20 LTS..."
+  Write-Host "Node.js not found - installing Node.js 20 LTS..."
   $msi = Join-Path $env:TEMP "node-lts.msi"
   Invoke-WebRequest "https://nodejs.org/dist/v20.18.1/node-v20.18.1-x64.msi" -OutFile $msi -UseBasicParsing
   $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /qn /norestart" -Wait -PassThru
@@ -129,7 +129,7 @@ Start-ScheduledTask -TaskName "DataCareInvoiceAPI"
 
 # ---------- 5. optional HTTPS with Caddy ----------
 if ($Domain) {
-  Step "Caddy – automatic HTTPS for https://$Domain"
+  Step "Caddy - automatic HTTPS for https://$Domain"
   $caddy = Join-Path $InstallPath "caddy.exe"
   if (-not (Test-Path $caddy)) {
     Invoke-WebRequest "https://caddyserver.com/api/download?os=windows&arch=amd64" -OutFile $caddy -UseBasicParsing
