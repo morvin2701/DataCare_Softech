@@ -13,6 +13,11 @@
 </head>
 <body>
 
+<div id="noBackend" class="no-backend" hidden>
+  <b>Not connected to a server.</b> Documents are being saved in this browser only and there is no sign-in.
+  To enable the shared database and team sign-in, set <code>apiBase</code> in <code>js/config.js</code> to your backend's HTTPS address and redeploy (see DEPLOY.md).
+  <button type="button" id="noBackendClose" aria-label="Dismiss">×</button>
+</div>
 <header class="topbar">
   <div class="tb-brand">
     <span class="tb-logo" aria-hidden="true"></span>

@@ -1575,6 +1575,11 @@ async function init() {
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p' && $('#view-editor').classList.contains('active')) { e.preventDefault(); printDoc(); }
   });
 
+  if (!API.online && !API.configured && location.protocol === 'https:') {
+    // hosted online (e.g. Vercel) but no backend configured: say so plainly instead of quietly using browser storage
+    $('#noBackend').hidden = false;
+    $('#noBackendClose').addEventListener('click', () => { $('#noBackend').hidden = true; });
+  }
   if (API.configured && !API.online) {
     // a separate backend is configured (e.g. frontend on Vercel) but cannot be reached: do not fall back to browser-only mode
     showLogin(`Cannot reach the server at ${window.APP_CONFIG.apiBase}. Check that it is running and reachable over HTTPS, then retry.`, { unreachable: true });
