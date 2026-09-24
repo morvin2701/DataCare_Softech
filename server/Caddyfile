@@ -1,0 +1,9 @@
+# Caddy reverse proxy: gives the backend a public HTTPS address with an automatic Let's Encrypt certificate.
+# 1. Point a DNS A record (e.g. api.datacaresoftech.com) at this server's public IP.
+# 2. Open ports 80 and 443 in Windows Firewall / router (port 3000 stays closed to the internet).
+# 3. Replace the hostname below, then run:  caddy run --config Caddyfile   (or install Caddy as a Windows service)
+
+api.datacaresoftech.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:3000
+}

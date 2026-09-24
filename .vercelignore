@@ -1,0 +1,3 @@
+# The backend is deployed separately on your own server – never to Vercel.
+server/
+README.md

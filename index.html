@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DataCare Softech – Invoice &amp; Quotation Generator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 60 60%27%3E%3Cg fill=%27none%27 stroke-width=%279%27%3E%3Cpath d=%27M25 3V17Q25 25 17 25H2%27 stroke=%27%23E53935%27/%3E%3Cpath d=%27M35 3V17Q35 25 43 25H58%27 stroke=%27%233FA34D%27/%3E%3Cpath d=%27M2 35H17Q25 35 25 43V57%27 stroke=%27%23F7B82E%27/%3E%3Cpath d=%27M58 35H43Q35 35 35 43V57%27 stroke=%27%232AA7E0%27/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=Quicksand:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/document.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="tb-brand">
+    <span class="tb-logo" aria-hidden="true"></span>
+    <div><strong>DataCare Softech</strong><small>Invoice &amp; Quotation Generator</small></div>
+  </div>
+  <nav class="tb-nav">
+    <button data-view="editor" class="active">Editor</button>
+    <button data-view="docs">Saved Documents</button>
+    <button data-view="settings">Settings</button>
+    <button data-view="team" id="navTeam" hidden>Team</button>
+  </nav>
+  <div class="tb-actions">
+    <div class="seg region-switch" id="regionSwitch" hidden title="Administrator: choose which team to work in">
+      <button type="button" data-region="UAE">UAE</button><button type="button" data-region="IN">India</button>
+    </div>
+    <span id="dbStatus" class="db-pill" hidden></span>
+    <div class="user-menu" id="userMenu" hidden>
+      <button type="button" class="user-chip" id="userChip" aria-haspopup="menu" aria-expanded="false">
+        <span class="avatar" id="userAvatar"></span>
+        <span class="user-txt"><b id="userName"></b><small id="userRegion"></small></span>
+        <span class="caret">▾</span>
+      </button>
+      <div class="menu" id="userDropdown" role="menu" hidden>
+        <button type="button" role="menuitem" id="miPassword">Change password</button>
+        <button type="button" role="menuitem" id="miLogout">Sign out</button>
+      </div>
+    </div>
+    <button class="btn" id="btnNewQ">+ New Quotation</button>
+    <button class="btn" id="btnNewI">+ New Invoice</button>
+  </div>
+</header>
+
+<main>
+  <!-- EDITOR -->
+  <section id="view-editor" class="view active">
+    <aside class="form" id="form"></aside>
+    <div class="preview-wrap">
+      <div class="preview-toolbar">
+        <div class="pt-left">
+          <span id="docLabel" class="doc-label"></span>
+          <span id="dirtyFlag" class="dirty" hidden>● Unsaved changes</span>
+        </div>
+        <div class="pt-right">
+          <select id="tplSel" title="Document design">
+            <option value="premium">Premium design</option>
+            <option value="classic">Classic design</option>
+          </select>
+          <select id="zoomSel" title="Preview zoom">
+            <option value="fit">Fit</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1">100%</option>
+          </select>
+          <button class="btn" id="btnSave" title="Ctrl/Cmd + S">Save</button>
+          <button class="btn" id="btnPrint" title="Print, or choose “Save as PDF” in the print dialog">Print</button>
+          <button class="btn primary" id="btnPdf">Download PDF</button>
+        </div>
+      </div>
+      <div class="preview-scroll" id="previewScroll"><div id="preview" class="pages"></div></div>
+    </div>
+  </section>
+
+  <!-- SAVED DOCUMENTS -->
+  <section id="view-docs" class="view">
+    <div class="panel docs-panel">
+      <div class="page-head">
+        <div>
+          <h2>Saved Documents</h2>
+          <p class="page-sub">Every quotation and invoice the team has saved. Click a row to open it.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn" id="csvBtn" title="Download the listed documents as a spreadsheet (CSV)">Export CSV</button>
+          <button class="btn" data-new="quotation">+ New Quotation</button>
+          <button class="btn primary" data-new="invoice">+ New Invoice</button>
+        </div>
+      </div>
+
+      <div class="region-bar">
+        <div class="tabs region-tabs" id="regionTabs" role="tablist"></div>
+        <span class="region-note" id="regionNote"></span>
+      </div>
+      <div id="docStats" class="stats"></div>
+
+      <div class="card list-card">
+        <div class="list-toolbar">
+          <div class="tabs" id="docTabs" role="tablist">
+            <button data-t="" class="on">All <span></span></button>
+            <button data-t="quotation">Quotations <span></span></button>
+            <button data-t="invoice">Invoices <span></span></button>
+          </div>
+          <div class="filters">
+            <label class="search">
+              <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+              <input id="docSearch" type="search" placeholder="Search number, customer, city, mobile…" aria-label="Search documents">
+            </label>
+            <select id="docStatus" aria-label="Status"></select>
+          </div>
+        </div>
+        <div class="table-wrap"><table class="list" id="docTable"></table></div>
+        <div class="empty-state" id="docEmpty" hidden></div>
+        <div class="list-foot" id="docFoot"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TEAM (admin) -->
+  <section id="view-team" class="view">
+    <div class="panel docs-panel" id="teamPanel"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" class="view">
+    <div class="panel" id="settingsPanel"></div>
+  </section>
+</main>
+
+<!-- SIGN IN (shown when the app is served with the database server) -->
+<div id="login" class="login" hidden>
+  <div class="login-card">
+    <div class="login-brand"><span class="tb-logo big" aria-hidden="true"></span><div><b>DataCare Softech</b><small>Invoice &amp; Quotation</small></div></div>
+    <h1>Sign in</h1>
+    <p class="login-sub">Choose your team, then enter your username and password.</p>
+    <form id="loginForm" autocomplete="on">
+      <div class="seg login-seg" data-seg="region">
+        <button type="button" data-v="UAE" class="on"><span class="flag">🇦🇪</span> UAE · Dubai</button>
+        <button type="button" data-v="IN"><span class="flag">🇮🇳</span> India</button>
+      </div>
+      <label class="f">Username<input name="username" autocomplete="username" required autofocus></label>
+      <label class="f">Password
+        <span class="prefix-field">
+          <span class="prefix" id="pwPrefix">+971</span>
+          <input name="password" type="password" autocomplete="current-password" required inputmode="numeric" placeholder="mobile number">
+          <button type="button" class="peek" id="pwPeek" aria-label="Show password" title="Show / hide">👁</button>
+        </span>
+        <small class="login-hint" id="pwHint">Your password is your mobile number after +971 (unless you changed it).</small>
+      </label>
+      <div class="login-err" id="loginErr" role="alert" hidden></div>
+      <button class="btn primary wide" type="submit" id="loginBtn">Sign in</button>
+      <button class="btn wide" type="button" id="loginRetry" hidden style="margin-top:8px">Retry connection</button>
+    </form>
+    <p class="login-foot">Accounts are created by your administrator in <b>Team</b>.</p>
+  </div>
+</div>
+
+<!-- Off-screen area used for page layout, PDF capture and printing -->
+<div id="render-area" aria-hidden="true"></div>
+<div id="toast" role="status"></div>
+<dialog id="formDlg" class="dlg">
+  <form method="dialog" id="formDlgForm">
+    <h3 id="formDlgTitle"></h3>
+    <div id="formDlgBody" class="dlg-fields"></div>
+    <div class="dlg-err" id="formDlgErr" hidden></div>
+    <div class="dlg-actions">
+      <button class="btn" type="button" id="formDlgCancel">Cancel</button>
+      <button class="btn primary" type="submit" id="formDlgOk">Save</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="dlg" class="dlg">
+  <form method="dialog">
+    <h3 id="dlgTitle"></h3>
+    <p id="dlgMsg"></p>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel" id="dlgCancel">Cancel</button>
+      <button class="btn primary" value="ok" id="dlgOk">OK</button>
+    </div>
+  </form>
+</dialog>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script src="js/config.js"></script>
+<script src="js/data.js"></script>
+<script src="js/api.js"></script>
+<script src="js/document.js"></script>
+<script src="js/premium.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
