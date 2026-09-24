@@ -332,7 +332,7 @@ async function stats() {
   const r = await pool.request().query('SELECT Branch, COUNT(*) AS n FROM dbo.Documents GROUP BY Branch');
   const documents = {};
   for (const row of r.recordset) documents[row.Branch] = row.n;
-  return { database: DB_NAME, server: env.DB_SERVER, documents };
+  return { database: DB_NAME, documents };
 }
 
 module.exports = {

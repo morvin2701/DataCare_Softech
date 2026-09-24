@@ -36,7 +36,7 @@ function setDbStatus(state) {
   if (!el) return;
   el.hidden = false;
   el.className = 'db-pill ' + state;
-  if (state === 'db') { el.textContent = `SQL Server · ${API.info ? API.info.database : ''}`; el.title = `Data is stored in SQL Server on ${API.info ? API.info.server : ''}`; }
+  if (state === 'db') { el.textContent = `SQL Server · ${API.info ? API.info.database : ''}`; el.title = 'Data is stored in the company SQL Server database'; }
   else if (state === 'queued') { el.textContent = 'Syncing…'; el.title = 'Changes are queued and will be sent to the database shortly'; }
   else { el.textContent = 'Browser storage'; el.title = 'The database server is not running – data is kept in this browser only. Start server/start.bat to use SQL Server.'; }
 }
@@ -1094,7 +1094,7 @@ function settingsHTML() {
           <div class="backup-card">
             <b>Where data is stored</b>
             ${API.online
-              ? `<p>SQL Server database <b>${esc(API.info.database)}</b>${API.info.server ? ' on ' + esc(API.info.server) : ''}. A copy is kept in this browser for speed.</p>`
+              ? `<p>SQL Server database <b>${esc(API.info.database)}</b>. A copy is kept in this browser for speed.</p>`
               : `<p>This browser only (the database server is not running). ${usage == null ? '' : `${(usage / 1024).toFixed(0)} KB used of about 5 MB.`}</p>
                  <div class="meter"><span style="width:${usagePct}%"${usagePct > 80 ? ' class="hot"' : ''}></span></div>`}
           </div>

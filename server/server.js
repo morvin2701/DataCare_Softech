@@ -86,7 +86,7 @@ function noteFail(ip) {
 /* ---------- auth ---------- */
 app.get('/api/health', wrap(async (req, res) => {
   const s = await db.stats();
-  res.json({ ok: true, database: s.database, auth: true, ...(req.user ? { server: s.server, documents: s.documents } : {}) });
+  res.json({ ok: true, database: s.database, auth: true, ...(req.user ? { documents: s.documents } : {}) });
 }));
 
 app.post('/api/auth/login', wrap(async (req, res) => {
