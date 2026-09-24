@@ -12,3 +12,6 @@ Thumbs.db
 
 # vercel local state
 .vercel/
+
+# deployment package (contains server/.env)
+DataCareInvoice-server.zip
