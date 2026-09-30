@@ -149,6 +149,16 @@ function openDoc(d, isDirty = false) {
   renderPreview();
   persistDraft();
   showView('editor');
+  setEditorPane(readOnly ? 'preview' : 'form');   // phones: view-only documents open on the preview
+}
+
+/** Phones show the editor form or the preview, one at a time. Desktop ignores this (both are visible). */
+function setEditorPane(pane) {
+  const v = $('#view-editor');
+  v.classList.toggle('pane-form', pane === 'form');
+  v.classList.toggle('pane-preview', pane === 'preview');
+  $$('#editorTabs button').forEach(b => b.classList.toggle('on', b.dataset.pane === pane));
+  if (pane === 'preview') requestAnimationFrame(applyZoom);
 }
 
 async function confirmDiscard() {
@@ -487,8 +497,12 @@ function renderPreview() {
 }
 
 function applyZoom() {
-  const v = $('#zoomSel').value;
-  const z = v === 'fit' ? Math.max(0.3, Math.min(1, ($('#previewScroll').clientWidth - 44) / 794)) : Number(v);
+  const sc = $('#previewScroll');
+  if (!sc.clientWidth) return;   // preview pane hidden (phone, Edit tab): fit again when it is shown
+  const pad = parseFloat(getComputedStyle(sc).paddingLeft) + parseFloat(getComputedStyle(sc).paddingRight);
+  const narrow = window.matchMedia('(max-width: 960px)').matches;
+  const v = narrow ? 'fit' : $('#zoomSel').value;   // the zoom menu is hidden on phones
+  const z = v === 'fit' ? Math.max(0.3, Math.min(1, (sc.clientWidth - pad - 4) / 794)) : Number(v);
   $('#preview').style.zoom = z;
 }
 
@@ -978,9 +992,9 @@ function refreshSecondNumber() {
 function presetRowsHTML() {
   return S.presets.map((p, i) => `
     <tr>
-      <td><input data-preset="${i}" data-k="desc" value="${esc(p.desc)}" placeholder="Description"></td>
-      <td><input data-preset="${i}" data-k="AED" type="number" step="any" min="0" value="${p.AED ?? ''}" placeholder="0"></td>
-      <td><input data-preset="${i}" data-k="INR" type="number" step="any" min="0" value="${p.INR ?? ''}" placeholder="0"></td>
+      <td data-label="Description"><input data-preset="${i}" data-k="desc" value="${esc(p.desc)}" placeholder="Description"></td>
+      <td data-label="AED price"><input data-preset="${i}" data-k="AED" type="number" step="any" min="0" inputmode="decimal" value="${p.AED ?? ''}" placeholder="0"></td>
+      <td data-label="INR price"><input data-preset="${i}" data-k="INR" type="number" step="any" min="0" inputmode="decimal" value="${p.INR ?? ''}" placeholder="0"></td>
       <td><button type="button" class="icon-act danger" data-delpreset="${i}" title="Remove item" aria-label="Remove item">${icon('trash')}</button></td>
     </tr>`).join('') || `<tr><td colspan="4" class="muted center">No items yet – add your first price-list item.</td></tr>`;
 }
@@ -1179,7 +1193,7 @@ function loadSettingsForm() {
     if (!vis) return;
     const id = vis.target.id.replace('sect-', '');
     $$('.settings-nav a', p).forEach(a => a.classList.toggle('on', a.dataset.nav === id));
-  }, { root: p, rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+  }, { root: p.scrollHeight > p.clientHeight + 1 ? p : null, rootMargin: '-10% 0px -70% 0px', threshold: 0 });   // phones scroll the page, not the panel
   $$('.sect', p).forEach(sec => settingsObserver.observe(sec));
 }
 
@@ -1336,7 +1350,8 @@ function importBackup(file) {
 
 /* ---------------- shell ---------------- */
 function showView(v) {
-  $$('.tb-nav button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $$('.tb-nav button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  closeNewSheet();
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   if (v === 'docs') renderDocs();
   if (v === 'settings') {
@@ -1548,7 +1563,7 @@ async function renderTeam() {
     <div class="card list-card" style="margin-bottom:18px">
       <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${region === 'IN' ? '🇮🇳 India team' : '🇦🇪 UAE · Dubai team'} <span>${teamUsers.filter(u => u.region === region).length}</span></button></div>
         <button class="btn sm" data-adduser="${region}">+ Add member</button></div>
-      <div class="table-wrap"><table class="list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
+      <div class="table-wrap"><table class="list team-list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
       <tbody>${rows(region)}</tbody></table></div>
     </div>`;
   p.innerHTML = `
@@ -1597,6 +1612,11 @@ function bindTeam() {
   });
 }
 
+function closeNewSheet() {
+  const s = $('#newSheet');
+  if (s && !s.hidden) { s.hidden = true; $('#navNew').setAttribute('aria-expanded', 'false'); }
+}
+
 /* ---------------- start-up ---------------- */
 let appStarted = false;
 function startApp() {
@@ -1625,7 +1645,26 @@ async function init() {
   bindLogin();
   bindUserMenu();
 
-  $$('.tb-nav button').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+  $$('.tb-nav button[data-view]').forEach(b => b.addEventListener('click', () => { showView(b.dataset.view); window.scrollTo(0, 0); }));
+  // phones: "+ New" in the bottom bar opens a small menu
+  $('#navNew').addEventListener('click', e => {
+    e.stopPropagation();
+    const open = $('#newSheet').hidden;
+    $('#newSheet').hidden = !open;
+    $('#navNew').setAttribute('aria-expanded', String(open));
+  });
+  $('#newSheet').addEventListener('click', async e => {
+    const b = e.target.closest('[data-newdoc]');
+    if (!b) return;
+    closeNewSheet();
+    if (await confirmDiscard()) { openDoc(newDoc(b.dataset.newdoc)); window.scrollTo(0, 0); }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('#newSheet, #navNew')) closeNewSheet(); });
+  $('#editorTabs').addEventListener('click', e => {
+    const b = e.target.closest('button[data-pane]');
+    if (b) { setEditorPane(b.dataset.pane); window.scrollTo(0, 0); }
+  });
+  setEditorPane('form');
   $('#btnNewQ').addEventListener('click', async () => { if (await confirmDiscard()) openDoc(newDoc('quotation')); });
   $('#btnNewI').addEventListener('click', async () => { if (await confirmDiscard()) openDoc(newDoc('invoice')); });
   $('#btnSave').addEventListener('click', () => saveDoc());

@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
 <title>DataCare Softech – Invoice &amp; Quotation Generator</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 60 60%27%3E%3Cg fill=%27none%27 stroke-width=%279%27%3E%3Cpath d=%27M25 3V17Q25 25 17 25H2%27 stroke=%27%23E53935%27/%3E%3Cpath d=%27M35 3V17Q35 25 43 25H58%27 stroke=%27%233FA34D%27/%3E%3Cpath d=%27M2 35H17Q25 35 25 43V57%27 stroke=%27%23F7B82E%27/%3E%3Cpath d=%27M58 35H43Q35 35 35 43V57%27 stroke=%27%232AA7E0%27/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,12 +24,17 @@
     <span class="tb-logo" aria-hidden="true"></span>
     <div><strong>DataCare Softech</strong><small>Invoice &amp; Quotation Generator</small></div>
   </div>
-  <nav class="tb-nav">
-    <button data-view="editor" class="active">Editor</button>
-    <button data-view="docs">Saved Documents</button>
-    <button data-view="settings">Settings</button>
-    <button data-view="team" id="navTeam" hidden>Team</button>
+  <nav class="tb-nav" aria-label="Main">
+    <button data-view="editor" class="active"><svg class="ico nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg><span>Editor</span></button>
+    <button data-view="docs"><svg class="ico nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/></svg><span class="lbl-long">Saved Documents</span><span class="lbl-short">Documents</span></button>
+    <button type="button" class="nav-new" id="navNew" aria-haspopup="menu" aria-expanded="false"><svg class="ico nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New</span></button>
+    <button data-view="settings"><svg class="ico nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button>
+    <button data-view="team" id="navTeam" hidden><svg class="ico nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="3"/><path d="M16 15.5a6 6 0 0 1 6 4.5"/></svg><span>Team</span></button>
   </nav>
+  <div class="new-sheet" id="newSheet" role="menu" hidden>
+    <button type="button" role="menuitem" data-newdoc="quotation"><b>New Quotation</b><small>Price offer for a customer</small></button>
+    <button type="button" role="menuitem" data-newdoc="invoice"><b>New Invoice</b><small>Bill for a confirmed order</small></button>
+  </div>
   <div class="tb-actions">
     <div class="seg region-switch" id="regionSwitch" hidden title="Administrator: choose which team to work in">
       <button type="button" data-region="UAE">UAE</button><button type="button" data-region="IN">India</button>
@@ -45,37 +51,40 @@
         <button type="button" role="menuitem" id="miLogout">Sign out</button>
       </div>
     </div>
-    <button class="btn" id="btnNewQ">+ New Quotation</button>
-    <button class="btn" id="btnNewI">+ New Invoice</button>
+    <button class="btn" id="btnNewQ">+ <span class="lbl-new">New </span>Quotation</button>
+    <button class="btn" id="btnNewI">+ <span class="lbl-new">New </span>Invoice</button>
   </div>
 </header>
 
 <main>
   <!-- EDITOR -->
   <section id="view-editor" class="view active">
+    <div class="preview-toolbar">
+      <div class="pt-left">
+        <span id="docLabel" class="doc-label"></span>
+        <span id="dirtyFlag" class="dirty" hidden>● Unsaved changes</span>
+      </div>
+      <div class="pt-right">
+        <select id="tplSel" title="Document design">
+          <option value="premium">Premium design</option>
+          <option value="classic">Classic design</option>
+        </select>
+        <select id="zoomSel" title="Preview zoom">
+          <option value="fit">Fit</option>
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1">100%</option>
+        </select>
+        <button class="btn" id="btnSave" title="Ctrl/Cmd + S">Save</button>
+        <button class="btn" id="btnPrint" title="Print, or choose “Save as PDF” in the print dialog">Print</button>
+        <button class="btn primary" id="btnPdf">Download PDF</button>
+      </div>
+    </div>
+    <div class="seg editor-tabs" id="editorTabs" role="tablist">
+      <button type="button" data-pane="form" class="on">Edit</button><button type="button" data-pane="preview">Preview</button>
+    </div>
     <aside class="form" id="form"></aside>
     <div class="preview-wrap">
-      <div class="preview-toolbar">
-        <div class="pt-left">
-          <span id="docLabel" class="doc-label"></span>
-          <span id="dirtyFlag" class="dirty" hidden>● Unsaved changes</span>
-        </div>
-        <div class="pt-right">
-          <select id="tplSel" title="Document design">
-            <option value="premium">Premium design</option>
-            <option value="classic">Classic design</option>
-          </select>
-          <select id="zoomSel" title="Preview zoom">
-            <option value="fit">Fit</option>
-            <option value="0.5">50%</option>
-            <option value="0.75">75%</option>
-            <option value="1">100%</option>
-          </select>
-          <button class="btn" id="btnSave" title="Ctrl/Cmd + S">Save</button>
-          <button class="btn" id="btnPrint" title="Print, or choose “Save as PDF” in the print dialog">Print</button>
-          <button class="btn primary" id="btnPdf">Download PDF</button>
-        </div>
-      </div>
       <div class="preview-scroll" id="previewScroll"><div id="preview" class="pages"></div></div>
     </div>
   </section>
