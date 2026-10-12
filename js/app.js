@@ -1686,8 +1686,14 @@ function closeNewSheet() {
 let appStarted = false;
 function startApp() {
   const draft = Store.get('dc_current');
-  if (draft && draft.doc && draft.doc.items && canEdit(draft.doc)) { doc = normalizeDoc(draft.doc); dirty = !!draft.dirty; }
-  else { doc = newDoc('quotation'); dirty = false; }
+  if (draft && draft.doc && draft.doc.items && canEdit(draft.doc)) {
+    // With no unsaved changes, show the latest saved version (it may have been updated elsewhere);
+    // the remembered copy is only kept when it holds work that has not been saved yet.
+    const saved = draft.dirty ? null : docs.find(x => x.id === draft.doc.id);
+    doc = normalizeDoc(saved ? clone(saved) : draft.doc);
+    dirty = !!draft.dirty;
+    if (saved) persistDraft();
+  } else { doc = newDoc('quotation'); dirty = false; }
   readOnly = !canEdit(doc);
   $('#tplSel').value = S.template;
   renderUserChip();
