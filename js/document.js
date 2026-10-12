@@ -56,20 +56,29 @@ function headerContacts(d, S) {
 /** A fully paid invoice: nothing is payable any more, so the documents say "Paid" instead of "Payable". */
 const isPaidInvoice = d => d.type === 'invoice' && d.status === 'Paid';
 
-/* ---------- QR code (drawn as an SVG image so it prints and exports like the other artwork) ---------- */
+/* ---------- QR code ----------
+   Drawn onto a canvas and embedded as a PNG. (A size-less SVG shows on screen and in print, but comes out
+   blank in the PDF download, whose renderer needs an image with real pixel dimensions.) */
 const _qrCache = {};
 function qrImg(text, cls) {
   if (typeof qrcode !== 'function' || !text) return '';
   if (!_qrCache[text]) {
     const q = qrcode(0, 'M'); q.addData(text); q.make();
     const n = q.getModuleCount();
-    let path = '';
-    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
-    const m = 2;   // quiet zone
-    _qrCache[text] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${n + 2 * m} ${n + 2 * m}" shape-rendering="crispEdges"><rect x="${-m}" y="${-m}" width="${n + 2 * m}" height="${n + 2 * m}" fill="#fff"/><path d="${path}" fill="#1B2A4A"/></svg>`)}`;
+    const quiet = 2, scale = 12;                       // 12 px per module keeps it sharp when printed
+    const size = (n + quiet * 2) * scale;
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, size, size);
+    g.fillStyle = '#1B2A4A';
+    for (let r = 0; r < n; r++) for (let col = 0; col < n; col++) {
+      if (q.isDark(r, col)) g.fillRect((col + quiet) * scale, (r + quiet) * scale, scale, scale);
+    }
+    _qrCache[text] = { src: c.toDataURL('image/png'), size };
   }
-  return `<img class="${cls}" src="${_qrCache[text]}" alt="QR code">`;
+  const { src, size } = _qrCache[text];
+  return `<img class="${cls}" src="${src}" width="${size}" height="${size}" alt="QR code">`;
 }
 
 /**
