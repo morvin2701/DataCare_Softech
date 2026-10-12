@@ -46,6 +46,18 @@ const HARDWARE_CONFIG = [
   'Android Device 4 GB RAM 64 GB or up and Android version 10 or higher required.'
 ];
 
+// Detailed version for invoices. "Title: text" lines print the title in bold.
+const HARDWARE_CONFIG_DETAILED = [
+  'Processor: Minimum Intel Core i5 or i7 processor.',
+  'Operating System: Genuine Windows 10 Pro or 11 Pro (64-bit).',
+  'Memory (RAM): Minimum 8 GB RAM. 16 GB is recommended when several users work at the same time.',
+  'Storage: SSD drive recommended, with enough free space for the database and daily backups.',
+  'Mobile App Device: Android phone or tablet with 4 GB RAM, 64 GB storage and Android version 10 or higher.',
+  'Internet: Stable internet connection for online support, software updates and WhatsApp features.',
+  'Printer & Scanner: Barcode label printer and barcode scanner.',
+  'Power & Backup: UPS recommended, with a regular data backup.'
+];
+
 const DEFAULT_SETTINGS = {
   companyName: 'Data Care Softech',
   legalName: 'DataCare Softech FZCO',
@@ -70,7 +82,8 @@ const DEFAULT_SETTINGS = {
   logo: null,
   stamp: null,
   terms: { quotation: QUOTATION_TERMS, invoice: INVOICE_TERMS },
-  hardware: HARDWARE_CONFIG,
+  hardware: HARDWARE_CONFIG,                    // quotations (short, keeps them on one page)
+  hardwareInvoice: HARDWARE_CONFIG_DETAILED,    // invoices (detailed)
   softwareVersions: ['DataCare Next'],
   presets: [
     { desc: 'DataCare Next Software Price (1 Month WhatsApp Free):', AED: 7000, INR: 0 },

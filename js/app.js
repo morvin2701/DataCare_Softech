@@ -115,6 +115,9 @@ function nextNumber(type, branch, date) {
   }
   return { number, seq };
 }
+/** Quotations use the short hardware list (one page); invoices use the detailed one. */
+const defaultHardware = type => [...((type === 'invoice' ? S.hardwareInvoice : S.hardware) || [])];
+
 function refreshAutoNumber() {
   if (doc.autoNumber && !doc.numberAssigned) doc.number = nextNumber(doc.type, doc.branch, doc.date).number;
 }
@@ -132,7 +135,7 @@ function newDoc(type, branch) {
     items: [{ desc: '', amount: 0 }],
     discount: 0, taxEnabled: false, taxLabel: b.taxLabel, taxRate: b.taxRate, advance: 0,
     showWords: type === 'invoice', notes: '',
-    showHardware: type === 'quotation', hardware: [...S.hardware],
+    showHardware: true, hardware: defaultHardware(type),
     terms: [...S.terms[type]], amcPercent: S.amcPercent, termsNewPage: type === 'invoice',
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
     showAcceptance: type === 'invoice', showStamp: false,
@@ -260,8 +263,8 @@ function formHTML(d) {
 
   <fieldset class="fs"><legend>Hardware Configuration</legend>
     <label class="chk"><input type="checkbox" data-f="showHardware"> Show hardware configuration</label>
-    <label class="f">One point per line<textarea data-f="hardware" data-list rows="4"></textarea></label>
-    <button type="button" class="btn link" id="resetHw">Reset to default</button>
+    <label class="f">One point per line. Write <code>Title: text</code> to print the title in bold.<textarea data-f="hardware" data-list rows="${isInv ? 8 : 4}"></textarea></label>
+    <button type="button" class="btn link" id="resetHw">Reset to default ${isInv ? 'invoice (detailed)' : 'quotation (short)'} list</button>
   </fieldset>
 
   <fieldset class="fs"><legend>Terms &amp; Conditions</legend>
@@ -399,9 +402,10 @@ function setType(t) {
   if (doc.type === t) return;
   const old = doc.type;
   if (JSON.stringify(doc.terms) === JSON.stringify(S.terms[old])) doc.terms = [...S.terms[t]];
+  if (JSON.stringify(doc.hardware) === JSON.stringify(defaultHardware(old))) doc.hardware = defaultHardware(t);
   Object.assign(doc, {
     type: t,
-    showHardware: t === 'quotation', showVersion: t === 'invoice',
+    showHardware: true, showVersion: t === 'invoice',
     showAcceptance: t === 'invoice', termsNewPage: t === 'invoice', showSupport: t === 'invoice'
   });
   if (!STATUSES[t].includes(doc.status)) doc.status = STATUSES[t][0];
@@ -470,7 +474,7 @@ function bindForm() {
     } else if (b.id === 'resetTerms') {
       doc.terms = [...S.terms[doc.type]]; syncForm(); changed();
     } else if (b.id === 'resetHw') {
-      doc.hardware = [...S.hardware]; syncForm(); changed();
+      doc.hardware = defaultHardware(doc.type); syncForm(); changed();
     }
   });
 }
@@ -806,7 +810,8 @@ function copyAsNew(src, type) {
   if (type !== src.type) {
     Object.assign(d, {
       terms: [...S.terms[type]],
-      showHardware: type === 'quotation', showVersion: type === 'invoice',
+      hardware: JSON.stringify(src.hardware) === JSON.stringify(defaultHardware(src.type)) ? defaultHardware(type) : src.hardware,
+      showHardware: true, showVersion: type === 'invoice',
       showAcceptance: type === 'invoice', termsNewPage: type === 'invoice',
       showWords: type === 'invoice', showSupport: type === 'invoice',
       fromQuotation: src.number
@@ -1187,8 +1192,13 @@ function settingsHTML() {
           <label class="f">Invoice terms &amp; conditions<textarea data-s="terms.invoice" data-list rows="12"></textarea>
             <span class="ta-foot"><em data-count="terms.invoice"></em><button type="button" class="btn link sm" data-resetdef="terms.invoice">Restore original</button></span></label>
         </div>
-        <label class="f" style="margin-top:14px">Hardware configuration (quotations)<textarea data-s="hardware" data-list rows="5"></textarea>
-          <span class="ta-foot"><em data-count="hardware"></em><button type="button" class="btn link sm" data-resetdef="hardware">Restore original</button></span></label>
+        <div class="grid2" style="margin-top:14px">
+          <label class="f">Hardware configuration – quotations (short)<textarea data-s="hardware" data-list rows="9"></textarea>
+            <span class="ta-foot"><em data-count="hardware"></em><button type="button" class="btn link sm" data-resetdef="hardware">Restore original</button></span></label>
+          <label class="f">Hardware configuration – invoices (detailed)<textarea data-s="hardwareInvoice" data-list rows="9"></textarea>
+            <span class="ta-foot"><em data-count="hardwareInvoice"></em><button type="button" class="btn link sm" data-resetdef="hardwareInvoice">Restore original</button></span></label>
+        </div>
+        <p class="hint" style="margin-top:8px">Write a point as <code>Title: text</code> and the title prints in bold. The short list keeps quotations on one page.</p>
       `)}
 
       ${sect('backup', 'Backup &amp; data', API.online ? 'Documents and settings are stored in your SQL Server database. Backups are still a good habit.' : 'Everything is stored in this browser only. Export a backup regularly and before changing computers.', `

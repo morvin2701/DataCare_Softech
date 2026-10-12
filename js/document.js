@@ -111,6 +111,12 @@ function docTotals(d) {
   return { sub, disc, tax, total, adv, balance: round2(total - adv) };
 }
 
+/** Splits "Title: text" into its two parts; lines without a short title return { title: '' }. */
+function splitTitled(line) {
+  const m = /^([^:]{2,34}):\s+(.+)$/.exec(String(line || '').trim());
+  return m ? { title: m[1], text: m[2] } : { title: '', text: String(line || '').trim() };
+}
+
 function renderTerm(text, amc) {
   return esc(text).replace(/\{AMC\}/g, `<b><u>${Number(amc || 0).toFixed(2)} %</u></b>`);
 }
@@ -239,7 +245,13 @@ function buildBlocks(d, S) {
       add(i === 0 ? `<h3 class="sec-h">${title}</h3>${li}` : li, i === 0 ? opts : {});
     });
   };
-  if (d.showHardware) bullets('Hardware Configuration:', d.hardware);
+  if (d.showHardware) {
+    (d.hardware || []).filter(t => t && t.trim()).forEach((t, i) => {
+      const h = splitTitled(t);
+      const li = `<div class="bl">${h.title ? `<b>${esc(h.title)}:</b> ` : ''}${esc(h.text)}</div>`;
+      add(i === 0 ? `<h3 class="sec-h">Hardware Configuration:</h3>${li}` : li);
+    });
+  }
 
   // Payment received / support / QR code
   const info = infoSection(d, S);
@@ -248,11 +260,11 @@ function buildBlocks(d, S) {
     const cells = [];
     if (info.payment) cells.push(`<td><b class="info-h paid">${info.payment.title}</b>
         ${row('Amount', `${cur} ${fmtMoney(info.payment.amount, cur)}`)}${row('Date', fmtDate(info.payment.date))}${row('Mode', info.payment.mode)}${row('Reference', info.payment.ref)}
-        ${info.payment.balance !== undefined ? row('Balance due', `${cur} ${fmtMoney(info.payment.balance, cur)}`) : `<div class="info-note">${esc(info.payment.note)}</div>`}</td>`);
+        ${info.payment.balance !== undefined ? row('Balance due', `${cur} ${fmtMoney(info.payment.balance, cur)}`) : '<div class="info-note">Paid in full.</div>'}</td>`);
     if (info.support) cells.push(`<td><b class="info-h">Support</b>
         ${row('Phone', info.support.phone)}${info.support.whatsapp !== info.support.phone ? row('WhatsApp', info.support.whatsapp) : ''}${row('Email', info.support.email)}${row('Hours', info.support.hours)}</td>`);
     if (info.qr) cells.push(`<td class="info-qr">${qrImg(info.qr.url, 'qr')}<div><b>${esc(info.qr.title)}</b><br>${esc(info.qr.sub)}</div></td>`);
-    add(`<table class="info"><tr>${cells.join('')}</tr></table>`);
+    add(`<table class="info"><tr>${cells.join('')}</tr></table>`, { preferFirst: true });
   }
 
   bullets('Our Terms &amp; Conditions:', d.terms, { breakBefore: d.termsNewPage });
@@ -287,40 +299,57 @@ function newPageEl(d, S) {
  * i.e. not display:none, so heights can be measured).
  */
 function renderPages(d, S, container) {
-  container.innerHTML = '';
   const premium = S.template !== 'classic';
   const blocks = premium ? buildBlocksPremium(d, S) : buildBlocks(d, S);
-  let page, body;
-  const next = () => {
-    page = premium ? newPagePremium(d, S, container.children.length) : newPageEl(d, S);
-    container.appendChild(page);
-    if (premium) fitContacts(page);
-    body = page.querySelector('.pg-body');
-  };
-  const overflows = () => body.scrollHeight > body.clientHeight + 1;
-  next();
 
-  for (let i = 0; i < blocks.length; i++) {
-    const b = blocks[i];
-    if (b.breakBefore && body.children.length) next();
+  /** Lays the blocks out. Returns false when a block that belongs on page 1 (preferFirst) did not fit there. */
+  const layout = tight => {
+    container.innerHTML = '';
+    let page, body, firstPageOk = true;
+    const next = () => {
+      page = premium ? newPagePremium(d, S, container.children.length) : newPageEl(d, S);
+      page.classList.toggle('fit-tight', tight);
+      container.appendChild(page);
+      if (premium) fitContacts(page);
+      body = page.querySelector('.pg-body');
+    };
+    const overflows = () => body.scrollHeight > body.clientHeight + 1;
+    next();
 
-    const group = [b];
-    // keep headings with the following block
-    while (group[group.length - 1].keepWithNext && blocks[i + group.length]) group.push(blocks[i + group.length]);
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      // "Start on a new page" keeps page 1 free of terms. If earlier content already ran onto page 2,
+      // the terms simply follow it there instead of leaving that page almost empty.
+      if (b.breakBefore && body.children.length && container.children.length === 1) next();
 
-    const els = group.map(g => {
-      const el = document.createElement('div');
-      el.className = 'blk' + (g.cls ? ' ' + g.cls : '');
-      el.innerHTML = g.html;
-      return el;
-    });
-    els.forEach(el => body.appendChild(el));
-    if (overflows() && body.children.length > els.length) {
-      els.forEach(el => el.remove());
-      next();
+      const group = [b];
+      // keep headings with the following block
+      while (group[group.length - 1].keepWithNext && blocks[i + group.length]) group.push(blocks[i + group.length]);
+
+      const els = group.map(g => {
+        const el = document.createElement('div');
+        el.className = 'blk' + (g.cls ? ' ' + g.cls : '');
+        el.innerHTML = g.html;
+        return el;
+      });
       els.forEach(el => body.appendChild(el));
+      if (overflows() && body.children.length > els.length) {
+        els.forEach(el => el.remove());
+        next();
+        els.forEach(el => body.appendChild(el));
+      }
+      if (group.some(g => g.preferFirst) && container.children.length > 1) firstPageOk = false;
+      i += group.length - 1;
     }
-    i += group.length - 1;
+    return { ok: firstPageOk, pages: container.children.length };
+  };
+
+  // Normal spacing first. If that pushes the page-1 info row onto page 2 (leaving a gap at the bottom of
+  // page 1), try slightly tighter spacing, and keep it only when it brings the row back or saves a page.
+  const normal = layout(false);
+  if (!normal.ok) {
+    const tight = layout(true);
+    if (!tight.ok && tight.pages >= normal.pages) layout(false);
   }
 
   const pages = container.querySelectorAll('.page');

@@ -178,7 +178,10 @@ function buildBlocksPremium(d, S) {
   const hw = (d.hardware || []).filter(Boolean);
   if (d.showHardware && hw.length) {
     add(`<div class="p-sec">Hardware Configuration</div>
-      <div class="p-hw">${hw.map(t => `<div>${P_ICON.check}<span>${esc(t)}</span></div>`).join('')}</div>`);
+      <div class="p-hw${hw.some(t => splitTitled(t).title) ? ' titled' : ''}">${hw.map(t => {
+        const h = splitTitled(t);
+        return `<div>${P_ICON.check}<span>${h.title ? `<b>${esc(h.title)}</b>` : ''}${esc(h.text)}</span></div>`;
+      }).join('')}</div>`);
   }
 
   // Payment received / support / QR code
@@ -203,15 +206,16 @@ function buildBlocksPremium(d, S) {
       cards.push(`<div class="p-icard">
           <div class="p-label">Support</div>
           <div class="p-sups${info.payment ? '' : ' two'}">
-            ${line(P_ICON.phone, 'Call us', s.phone)}
-            ${line(P_ICON.chat, 'WhatsApp', s.whatsapp)}
+            ${s.whatsapp.replace(/\D/g, '') === s.phone.replace(/\D/g, '')
+              ? line(P_ICON.chat, 'Call / WhatsApp', s.phone)
+              : line(P_ICON.phone, 'Call us', s.phone) + line(P_ICON.chat, 'WhatsApp', s.whatsapp)}
             ${line(P_ICON.clock, 'Working hours', s.hours)}
-            ${line(P_ICON.mailsm, 'Email', s.email)}
+            ${info.payment ? '' : line(P_ICON.mailsm, 'Email', s.email) /* narrow layout: the email is already on the header */}
           </div>
         </div>`);
     }
     if (info.qr) cards.push(`<div class="p-icard qr">${qrImg(info.qr.url, 'p-qr')}<b>${esc(info.qr.title)}</b><small>${esc(info.qr.sub)}</small></div>`);
-    add(`<div class="p-info n${cards.length}${info.qr ? ' has-qr' : ''}${info.payment ? ' has-pay' : ''}">${cards.join('')}</div>`);
+    add(`<div class="p-info n${cards.length}${info.qr ? ' has-qr' : ''}${info.payment ? ' has-pay' : ''}">${cards.join('')}</div>`, { preferFirst: true });
   }
 
   // Terms, in chunks so long lists can flow across pages
