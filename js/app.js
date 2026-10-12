@@ -328,8 +328,11 @@ function updateSum() {
   let h = line('Sub total', t.sub);
   if (t.disc) h += line('Discount', -t.disc);
   if (doc.taxEnabled) h += line(`${esc(doc.taxLabel)} ${doc.taxRate}%`, t.tax);
-  h += line('Total payable', t.total, 't');
-  if (t.adv) h += line('Advance', t.adv) + line('Balance due', t.balance, 't');
+  if (isPaidInvoice(doc)) h += line('Total paid', t.total, 't') + line('Balance due', 0);
+  else {
+    h += line('Total payable', t.total, 't');
+    if (t.adv) h += line('Advance', t.adv) + line('Balance due', t.balance, 't');
+  }
   $('#sumBox').innerHTML = h;
 }
 
@@ -749,7 +752,7 @@ function renderDocs() {
         <td><span class="chip">${d.branch === 'IN' ? 'India' : 'UAE'}</span></td>
         <td class="num">
           <div class="cell-main">${fmtMoney(t.total, d.currency, false)}${Number.isInteger(t.total) ? '.00' : ''} <small>${esc(d.currency)}</small></div>
-          ${t.adv && d.type === 'invoice' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
+          ${t.adv && d.type === 'invoice' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
         </td>
         <td>${statusSel(d)}</td>
         <td class="act-col"><div class="acts">${editable ? `

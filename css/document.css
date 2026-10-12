@@ -58,6 +58,7 @@
 .page .d-title h1 { margin: 0 20px; font-size: 27px; font-weight: 700; letter-spacing: .3px; }
 .page .d-title .right { display: flex; justify-content: flex-end; }
 .page .box { display: inline-block; border: 1.4px solid #222; padding: 6px 14px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.page .paid-tag { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 1px 9px; border: 2px solid #2E9E5B; color: #2E9E5B; border-radius: 4px; font-size: 13px; letter-spacing: 2px; }
 .page .intro { margin: 6px 0 10px; }
 .page .intro.b { font-weight: 700; }
 
@@ -158,10 +159,12 @@
 }
 .tpl-premium .p-meta span { color: var(--muted); text-align: right; }
 .tpl-premium .p-meta b { color: var(--navy); font-weight: 600; text-align: right; }
+.tpl-premium .p-title-row { display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
 .tpl-premium .p-paid {
-  display: inline-block; margin-top: 8px; padding: 2px 12px; border: 1.5px solid #2E9E5B; color: #2E9E5B;
-  border-radius: 4px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-size: 11px;
+  flex: none; padding: 3px 11px 3px 13px; border: 2px solid #2E9E5B; color: #2E9E5B; background: #F0FAF4;
+  border-radius: 5px; font-family: Poppins, Arial, sans-serif; font-weight: 700; letter-spacing: 2.5px; text-transform: uppercase; font-size: 12px; line-height: 1.3;
 }
+.tpl-premium .p-grand.paid { background: linear-gradient(135deg, #34B36A 0%, #2A9A58 55%, #1F8449 100%); }
 .tpl-premium .p-contacts {
   position: absolute; top: 136px; left: 48px; right: 48px;
   display: flex; justify-content: space-between; gap: 10px;

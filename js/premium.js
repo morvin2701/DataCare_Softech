@@ -53,17 +53,16 @@ function premiumHeader(d, S, first) {
   const [own, other] = headerContacts(d, S);
   const ct = (icon, label, value) => value
     ? `<div class="p-ct">${icon}<div><small>${esc(label)}</small><b>${esc(value)}</b></div></div>` : '';
-  const paid = isInv && d.status === 'Paid' ? '<div class="p-paid">Paid</div>' : '';
+  const paid = isPaidInvoice(d) ? '<div class="p-paid">Paid</div>' : '';
   return `${P_STRIP_TOP}
     <div class="p-head">
       ${brand}
       <div class="p-doc">
-        <div class="p-title">${title}</div>
+        <div class="p-title-row">${paid}<div class="p-title">${title}</div></div>
         <div class="p-meta">
           <span>${title} No.</span><b>${esc(d.number)}</b>
           <span>Date</span><b>${esc(fmtDate(d.date))}</b>
         </div>
-        ${paid}
       </div>
     </div>
     <div class="p-contacts">
@@ -142,13 +141,21 @@ function buildBlocksPremium(d, S) {
   let tot = tr('Sub Total', pMoney(T.sub, cur));
   if (T.disc) tot += tr('Discount', '− ' + pMoney(T.disc, cur));
   if (d.taxEnabled) tot += tr(`${esc(d.taxLabel)} @ ${Number(d.taxRate) || 0}%`, pMoney(T.tax, cur));
-  tot += `<div class="p-grand"><span>Total Payable</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
-  if (T.adv) {
-    tot += tr('Advance Received', '− ' + pMoney(T.adv, cur), 'adv');
-    tot += `<div class="p-balance"><span>Balance Due</span><b>${esc(cur)} ${pMoney(T.balance, cur)}</b></div>`;
+  const paidInFull = isPaidInvoice(d);
+  if (paidInFull) {
+    // fully paid: show what was paid, and that nothing is left to pay
+    tot += `<div class="p-grand paid"><span>Total Paid</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
+    tot += tr('Balance Due', pMoney(0, cur), 'adv');
+  } else {
+    tot += `<div class="p-grand"><span>Total Payable</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
+    if (T.adv) {
+      tot += tr('Advance Received', '− ' + pMoney(T.adv, cur), 'adv');
+      tot += `<div class="p-balance"><span>Balance Due</span><b>${esc(cur)} ${pMoney(T.balance, cur)}</b></div>`;
+    }
   }
+  const wordsAmount = paidInFull || !T.adv ? T.total : T.balance;
   const words = d.showWords
-    ? `<div class="p-label">Amount in Words</div><div class="p-words-t">${esc(amountInWords(T.adv ? T.balance : T.total, cur))}</div>` : '';
+    ? `<div class="p-label">Amount in Words</div><div class="p-words-t">${esc(amountInWords(wordsAmount, cur))}</div>` : '';
   const notes = d.notes && d.notes.trim()
     ? `<div class="p-label${words ? ' mt' : ''}">Note</div><div class="p-note">${esc(d.notes).replace(/\n/g, '<br>')}</div>` : '';
   add(`<div class="p-sum">

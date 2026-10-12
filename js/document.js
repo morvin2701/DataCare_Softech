@@ -53,6 +53,9 @@ function headerContacts(d, S) {
   ];
 }
 
+/** A fully paid invoice: nothing is payable any more, so the documents say "Paid" instead of "Payable". */
+const isPaidInvoice = d => d.type === 'invoice' && d.status === 'Paid';
+
 function docTotals(d) {
   const sub = round2(d.items.reduce((s, it) => s + (Number(it.amount) || 0), 0));
   const disc = Math.min(round2(d.discount), sub);
@@ -121,7 +124,7 @@ function buildBlocks(d, S) {
   // Title row: number | title | date
   add(`<div class="d-title">
       <div>${d.number ? `<div class="box">${isInv ? 'Inv' : 'Quot'} No: ${esc(d.number)}</div>` : ''}</div>
-      <h1>${isInv ? 'Invoice' : 'Quotation'}</h1>
+      <h1>${isInv ? 'Invoice' : 'Quotation'}${isPaidInvoice(d) ? ' <span class="paid-tag">PAID</span>' : ''}</h1>
       <div class="right"><div class="box">Date:&nbsp;&nbsp; ${esc(fmtDate(d.date))}</div></div>
     </div>
     <p class="intro${isInv ? ' b' : ''}">${isInv
@@ -161,16 +164,22 @@ function buildBlocks(d, S) {
     if (T.disc) tot += `<tr class="sub"><td>Less: Discount:</td><td class="amt">- ${fmtMoney(T.disc, cur)}</td></tr>`;
     if (d.taxEnabled) tot += `<tr class="sub"><td>${esc(d.taxLabel)} @ ${Number(d.taxRate) || 0}%:</td><td class="amt">${fmtMoney(T.tax, cur)}</td></tr>`;
   }
-  tot += `<tr class="total"><td>Total Payable Amount:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
-  if (T.adv) {
-    tot += `<tr class="sub"><td>Advance Received:</td><td class="amt">${fmtMoney(T.adv, cur)}</td></tr>`;
-    tot += `<tr class="total"><td>Balance Due:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
+  const paidInFull = isPaidInvoice(d);
+  if (paidInFull) {
+    tot += `<tr class="total"><td>Total Paid Amount:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
+    tot += `<tr class="sub"><td>Balance Due:</td><td class="amt">Nil</td></tr>`;
+  } else {
+    tot += `<tr class="total"><td>Total Payable Amount:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
+    if (T.adv) {
+      tot += `<tr class="sub"><td>Advance Received:</td><td class="amt">${fmtMoney(T.adv, cur)}</td></tr>`;
+      tot += `<tr class="total"><td>Balance Due:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
+    }
   }
   add(`<table class="items">
       <thead><tr><th>Description</th><th class="amt">Price (${esc(cur)})</th></tr></thead>
       <tbody>${rows || '<tr><td>&nbsp;</td><td></td></tr>'}${tot}</tbody>
     </table>
-    ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(T.adv ? T.balance : T.total, cur))}</p>` : ''}`);
+    ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(paidInFull || !T.adv ? T.total : T.balance, cur))}</p>` : ''}`);
 
   if (d.notes && d.notes.trim()) {
     add(`<div class="notes"><b>Note:</b> ${esc(d.notes).replace(/\n/g, '<br>')}</div>`);
