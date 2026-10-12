@@ -135,14 +135,22 @@ function newDoc(type, branch) {
     showHardware: type === 'quotation', hardware: [...S.hardware],
     terms: [...S.terms[type]], amcPercent: S.amcPercent, termsNewPage: type === 'invoice',
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
-    showAcceptance: type === 'invoice', showStamp: false
+    showAcceptance: type === 'invoice', showStamp: false,
+    showSupport: type === 'invoice', payment: { date: '', mode: '', ref: '' }
   };
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
   return d;
 }
 
+/** Documents saved before a field existed get that field's default. */
+function normalizeDoc(d) {
+  if (d.showSupport === undefined) d.showSupport = d.type === 'invoice';
+  if (!d.payment || typeof d.payment !== 'object') d.payment = { date: '', mode: '', ref: '' };
+  return d;
+}
+
 function openDoc(d, isDirty = false) {
-  doc = d;
+  doc = normalizeDoc(d);
   dirty = isDirty;
   readOnly = !canEdit(d);
   loadForm();
@@ -238,6 +246,14 @@ function formHTML(d) {
       <label class="f">Rate %<input type="number" step="any" min="0" data-f="taxRate"></label>
     </div>
     <label class="chk"><input type="checkbox" data-f="showWords"> Show amount in words</label>
+    <div id="payBox" class="pay-box">
+      <div class="hint" id="payTitle">Payment received – printed on the invoice</div>
+      <div class="row">
+        <label class="f">Payment date<input type="date" data-f="payment.date"></label>
+        <label class="f">Mode<select data-f="payment.mode"><option value="">—</option>${PAYMENT_MODES.map(m => opt(m, m, (d.payment || {}).mode)).join('')}</select></label>
+      </div>
+      <div class="row one"><label class="f">Reference / cheque / transaction no. (optional)<input data-f="payment.ref" placeholder="e.g. TRN 4582, Cheque 001234"></label></div>
+    </div>
     <div class="sum-box" id="sumBox"></div>
     <div class="row one" style="margin-top:10px"><label class="f">Note (optional, printed below the table)<textarea data-f="notes" rows="2" style="min-height:48px"></textarea></label></div>
   </fieldset>
@@ -262,6 +278,7 @@ function formHTML(d) {
       <label class="f">Prepared By<input data-f="preparedBy"></label>
       <label class="f">Mobile<input data-f="preparedMobile"></label>
     </div>
+    <label class="chk"><input type="checkbox" data-f="showSupport"> Show support details &amp; QR code <span class="hint">(numbers are set in Settings → Support &amp; QR)</span></label>
     <label class="chk"><input type="checkbox" data-f="showAcceptance"> Show “Read and accepted…” customer signature block</label>
     <label class="chk"><input type="checkbox" data-f="showStamp" ${S.stamp ? '' : 'disabled'}> Show company stamp / signature ${S.stamp ? '' : '<span class="hint">(upload one in Settings)</span>'}</label>
   </fieldset>`;
@@ -306,6 +323,9 @@ function syncForm() {
   const uae = /^(uae|u\.a\.e\.?|united arab emirates)$/i.test((doc.customer.country || '').trim());
   $('#cityLbl').textContent = uae ? 'Emirate' : 'City';
   $('#taxRow').style.display = doc.taxEnabled ? '' : 'none';
+  const payOn = doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid');
+  $('#payBox').style.display = payOn ? '' : 'none';
+  $('#payTitle').textContent = doc.status === 'Partially Paid' ? 'Advance received – printed on the invoice (enter the amount in “Advance received” above)' : 'Payment received – printed on the invoice';
   $('#numHint').textContent = doc.autoNumber && !doc.numberAssigned
     ? 'Number is assigned automatically when you save. Type your own to override.'
     : (doc.autoNumber ? '' : 'Custom number. Clear the field to go back to automatic numbering.');
@@ -361,6 +381,9 @@ function onField(f, el) {
     if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
   } else if (f === 'date') {
     refreshAutoNumber();
+  } else if (f === 'status') {
+    // marking an invoice paid: assume it was paid today unless a date is already entered
+    if (doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid') && !doc.payment.date) doc.payment.date = todayISO();
   } else if (f === 'customer.company') {
     const hit = customerIndex().get(el.value.trim().toLowerCase());
     if (hit && !doc.customer.mobile && !doc.customer.address && !doc.customer.contact) {
@@ -379,7 +402,7 @@ function setType(t) {
   Object.assign(doc, {
     type: t,
     showHardware: t === 'quotation', showVersion: t === 'invoice',
-    showAcceptance: t === 'invoice', termsNewPage: t === 'invoice'
+    showAcceptance: t === 'invoice', termsNewPage: t === 'invoice', showSupport: t === 'invoice'
   });
   if (!STATUSES[t].includes(doc.status)) doc.status = STATUSES[t][0];
   if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
@@ -777,14 +800,15 @@ function copyAsNew(src, type) {
   const d = clone(src);
   Object.assign(d, {
     id: uid(), type, autoNumber: true, numberAssigned: false, number: '',
-    date: todayISO(), status: STATUSES[type][0], createdAt: undefined, updatedAt: undefined
+    date: todayISO(), status: STATUSES[type][0], createdAt: undefined, updatedAt: undefined,
+    payment: { date: '', mode: '', ref: '' }
   });
   if (type !== src.type) {
     Object.assign(d, {
       terms: [...S.terms[type]],
       showHardware: type === 'quotation', showVersion: type === 'invoice',
       showAcceptance: type === 'invoice', termsNewPage: type === 'invoice',
-      showWords: type === 'invoice',
+      showWords: type === 'invoice', showSupport: type === 'invoice',
       fromQuotation: src.number
     });
   }
@@ -887,10 +911,12 @@ function bindDocs() {
     const i = docs.findIndex(x => x.id === id);
     if (i < 0 || !canEdit(docs[i])) return;
     docs[i].status = sel.value;
+    normalizeDoc(docs[i]);
+    if (docs[i].type === 'invoice' && (sel.value === 'Paid' || sel.value === 'Partially Paid') && !docs[i].payment.date) docs[i].payment.date = todayISO();
     docs[i].updatedAt = new Date().toISOString();
     if (!Store.set('dc_docs', docs) && !API.online) { toast('Could not save – browser storage is full or blocked.', true); return; }
     remotePutDoc(docs[i]);
-    if (doc.id === id) { doc.status = sel.value; persistDraft(); }
+    if (doc.id === id) { doc.status = sel.value; doc.payment = clone(docs[i].payment); persistDraft(); }
     toast(`${docs[i].number} marked ${sel.value}`);
     renderDocs();
   });
@@ -915,7 +941,7 @@ function ask({ title, message, ok = 'OK', cancel = 'Cancel', danger = false }) {
 
 /* ---------------- settings ---------------- */
 const SETTINGS_SECTIONS = [
-  ['company', 'Company'], ['branding', 'Branding'], ['branches', 'Branches'], ['defaults', 'Document defaults'],
+  ['company', 'Company'], ['branding', 'Branding'], ['branches', 'Branches'], ['support', 'Support & QR code'], ['defaults', 'Document defaults'],
   ['numbering', 'Numbering'], ['pricelist', 'Price list'], ['text', 'Default text'], ['backup', 'Backup & data']
 ];
 const SICON = {
@@ -923,6 +949,7 @@ const SICON = {
   branding: '<circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="10" r="1.2" fill="currentColor"/><path d="M12 21a2.5 2.5 0 0 0 0-5h-1.5a1.5 1.5 0 0 1 0-3H14a5 5 0 0 0 5-5"/>',
   branches: '<path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>',
   defaults: '<path d="M4 6h16M4 12h10M4 18h7"/>',
+  support: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.500"/><rect x="17" y="13" width="4" height="6" rx="1.500"/><path d="M20 19a4 4 0 0 1-4 3h-3"/>',
   numbering: '<path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/>',
   pricelist: '<path d="M20 12l-8 8-8-8V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
   text: '<path d="M4 6h16M4 10h16M4 14h10M4 18h6"/>',
@@ -985,6 +1012,17 @@ function c2PreviewHTML(phone) {
   return `Header shows:
       <span class="c2-chip"><b>${esc(label || '?')}</b> ${esc(phone)}</span>
       ${label ? '' : '<small>Add +971 or +91 at the start so the label shows UAE or India.</small>'}`;
+}
+
+/** Live preview of the QR code and where it leads. */
+function refreshQrPreview() {
+  const box = $('#qrPreview');
+  if (!box) return;
+  const br = REGION || S.lastBranch || 'UAE';
+  const info = infoSection({ type: 'invoice', status: 'Unpaid', branch: br, items: [], showSupport: true }, S);
+  box.innerHTML = info && info.qr
+    ? `${qrImg(info.qr.url, 'qr-prev-img')}<div><b>${esc(info.qr.title)}</b><small>Opens: <a href="${esc(info.qr.url)}" target="_blank" rel="noopener">${esc(info.qr.url)}</a></small><small>Scan it with your phone camera to test.</small></div>`
+    : '<small>No QR code will be printed.</small>';
 }
 
 function refreshSecondNumber() {
@@ -1081,6 +1119,18 @@ function settingsHTML() {
       ${sect('branches', 'Branches', 'Each document is issued from one branch. The branch sets the currency, tax and which phone number comes first.', `
         <div class="grid2 tight">${branch('UAE')}${branch('IN')}</div>
         ${REGION ? '' : `<div class="branch-card" id="c2Wrap" style="margin-top:14px">${secondNumberHTML()}</div>`}
+      `)}
+
+      ${sect('support', 'Support &amp; QR code', 'Printed in a box on invoices (and on quotations when switched on in the editor), so customers know how to reach you.', `
+        <div class="grid2">
+          ${field('Support phone', inp('support.phone', `type="tel" placeholder="${esc(S.branches[REGION || S.lastBranch || 'UAE'].phone)}"`), 'Leave empty to use your branch number')}
+          ${field('WhatsApp number', inp('support.whatsapp', 'type="tel" placeholder="same as support phone"'), 'With country code, e.g. +971 55 …')}
+        </div>
+        <div class="grid2" style="margin-top:14px">
+          ${field('Working hours', inp('support.hours'))}
+          ${field('QR code opens', `<select data-s="qrTarget">${opt('whatsapp', 'WhatsApp chat with us', S.qrTarget)}${opt('website', 'Our website', S.qrTarget)}${opt('none', 'No QR code', S.qrTarget)}</select>`)}
+        </div>
+        <div class="qr-preview" id="qrPreview"></div>
       `)}
 
       ${sect('defaults', 'Document defaults', 'Pre-filled on every new document. You can still change them per document.', `
@@ -1187,6 +1237,7 @@ function loadSettingsForm() {
     else writeVal(el, v);
   });
   updateCounts(p);
+  refreshQrPreview();
   p.scrollTop = scroll;
 
   // highlight the section in view
@@ -1232,6 +1283,7 @@ function bindSettings() {
     }
     if (el.hasAttribute('data-list')) updateCounts(p);
     if (k === 'template') $('#tplSel').value = v;
+    if (k.startsWith('support.') || k === 'qrTarget' || k === 'website' || k.startsWith('branches.')) refreshQrPreview();
     settingsChanged();
   });
   p.addEventListener('change', e => {
@@ -1624,7 +1676,7 @@ function closeNewSheet() {
 let appStarted = false;
 function startApp() {
   const draft = Store.get('dc_current');
-  if (draft && draft.doc && draft.doc.items && canEdit(draft.doc)) { doc = draft.doc; dirty = !!draft.dirty; }
+  if (draft && draft.doc && draft.doc.items && canEdit(draft.doc)) { doc = normalizeDoc(draft.doc); dirty = !!draft.dirty; }
   else { doc = newDoc('quotation'); dirty = false; }
   readOnly = !canEdit(doc);
   $('#tplSel').value = S.template;

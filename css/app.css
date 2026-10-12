@@ -657,3 +657,12 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
   .tb-nav button { padding: 8px 9px; }
   .tb-actions { gap: 6px; }
 }
+
+/* payment fields in the editor, QR preview in settings */
+.pay-box { margin-top: 10px; padding: 10px 12px 4px; background: #f1faf5; border: 1px solid #cde9d8; border-radius: 8px; }
+.pay-box .hint { color: #1f6e40; font-weight: 600; margin-bottom: 8px; }
+.qr-preview { display: flex; align-items: center; gap: 14px; margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--border); border-radius: 10px; background: #fff; }
+.qr-preview .qr-prev-img { width: 96px; height: 96px; flex: none; border: 1px solid var(--border); border-radius: 6px; }
+.qr-preview b { display: block; font-size: 14px; }
+.qr-preview small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
+.qr-preview a { color: var(--blue); }

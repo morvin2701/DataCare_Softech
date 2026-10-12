@@ -59,6 +59,9 @@ const DEFAULT_SETTINGS = {
     UAE: { label: 'UAE', phone: '+971 55 176 0454', address: 'Dubai, U.A.E.', currency: 'AED', taxLabel: 'VAT', taxRate: 5, taxId: '' },
     IN:  { label: 'INDIA', phone: '+91 87581 11027', address: 'Ahmedabad, Gujarat, India', currency: 'INR', taxLabel: 'GST', taxRate: 18, taxId: '' }
   },
+  // Support box + QR code printed on documents. Empty phone / WhatsApp = the issuing branch's number.
+  support: { phone: '', whatsapp: '', hours: 'Monday to Saturday, 10:00 AM to 7:00 PM (Sunday closed)' },
+  qrTarget: 'whatsapp',   // 'whatsapp' | 'website' | 'none'
   preparedBy: 'Shreyash Thumar',
   headerContact2: { phone: '' },   // second number on the header; '' = the other branch's office number
   amcPercent: 10,
@@ -86,6 +89,7 @@ const STATUSES = {
   quotation: ['Draft', 'Sent', 'Accepted', 'Rejected'],
   invoice: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled']
 };
+const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'Cheque', 'Card', 'Online / UPI'];
 const CURRENCIES = {
   AED: { major: 'UAE Dirhams', minor: 'Fils', locale: 'en-US' },
   INR: { major: 'Rupees', minor: 'Paise', locale: 'en-IN' },

@@ -9,6 +9,17 @@ const P_ICON = {
     <g fill="none" stroke="#1B75BB" stroke-width="1.5"><circle cx="14" cy="14" r="6.5"/><ellipse cx="14" cy="14" rx="2.8" ry="6.5"/><path d="M7.5 14h13"/></g>`),
   mail: svgImg('p-ic', 28, 28, `<circle cx="14" cy="14" r="14" fill="#E8F2FB"/>
     <g fill="none" stroke="#1B75BB" stroke-width="1.5" stroke-linejoin="round"><rect x="7.5" y="9.5" width="13" height="9.5" rx="1.6"/><path d="M8 10.4l6 4.4 6-4.4"/></g>`),
+  phone: svgImg('p-ic sm', 24, 24, `<circle cx="12" cy="12" r="12" fill="#FFF1E6"/>
+    <path d="M9.2 6.6h1.7l.9 2.5-1.2.9c.6 1.3 1.6 2.3 2.9 2.9l.9-1.2 2.5.9v1.7c0 .6-.5 1.1-1.1 1.1C11.400 15.4 8.100 12.100 8.100 7.700c0-.6.5-1.100 1.100-1.100z" fill="#F28C28"/>`),
+  chat: svgImg('p-ic sm', 24, 24, `<circle cx="12" cy="12" r="12" fill="#E6F6EC"/>
+    <path d="M12 6.4a5.4 5.4 0 0 0-4.700 8.100L6.600 17.400l3-.7A5.400 5.400 0 1 0 12 6.400z" fill="none" stroke="#23884A" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M10.2 10.100c.2 1.500 1.300 2.700 2.800 3.100l.8-.8 1 .5" fill="none" stroke="#23884A" stroke-width="1.100" stroke-linecap="round"/>`),
+  clock: svgImg('p-ic sm', 24, 24, `<circle cx="12" cy="12" r="12" fill="#E8F2FB"/>
+    <g fill="none" stroke="#1B75BB" stroke-width="1.4" stroke-linecap="round"><circle cx="12" cy="12" r="5.600"/><path d="M12 9v3.200l2 1.200"/></g>`),
+  mailsm: svgImg('p-ic sm', 24, 24, `<circle cx="12" cy="12" r="12" fill="#E8F2FB"/>
+    <g fill="none" stroke="#1B75BB" stroke-width="1.300" stroke-linejoin="round"><rect x="6.500" y="8.200" width="11" height="7.800" rx="1.400"/><path d="M7 9l5 3.600L17 9"/></g>`),
+  tick: svgImg('p-ic sm', 24, 24, `<circle cx="12" cy="12" r="12" fill="#2A9A58"/>
+    <path d="M7.400 12.300l3 3 6.200-6.400" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`),
   check: svgImg('p-chk', 16, 16, `<circle cx="8" cy="8" r="8" fill="#1B75BB"/>
     <path d="M4.6 8.3l2.2 2.2 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`)
 };
@@ -168,6 +179,39 @@ function buildBlocksPremium(d, S) {
   if (d.showHardware && hw.length) {
     add(`<div class="p-sec">Hardware Configuration</div>
       <div class="p-hw">${hw.map(t => `<div>${P_ICON.check}<span>${esc(t)}</span></div>`).join('')}</div>`);
+  }
+
+  // Payment received / support / QR code
+  const info = infoSection(d, S);
+  if (info) {
+    const kv = (k, v) => (v ? `<span>${k}</span><b>${esc(v)}</b>` : '');
+    const line = (ic, k, v) => (v ? `<div class="p-sup">${ic}<div><small>${k}</small><b>${esc(v)}</b></div></div>` : '');
+    const cards = [];
+    if (info.payment) {
+      const p = info.payment;
+      cards.push(`<div class="p-icard pay">
+          <div class="p-ihead">${P_ICON.tick}<div class="p-label">${p.title}</div></div>
+          <div class="p-kv2">
+            ${kv('Amount', `${cur} ${pMoney(p.amount, cur)}`)}${kv('Date', fmtDate(p.date))}${kv('Mode', p.mode)}${kv('Reference', p.ref)}
+            ${p.balance !== undefined ? kv('Balance due', `${cur} ${pMoney(p.balance, cur)}`) : ''}
+          </div>
+          ${p.note ? `<div class="p-inote">${esc(p.note)}</div>` : ''}
+        </div>`);
+    }
+    if (info.support) {
+      const s = info.support;
+      cards.push(`<div class="p-icard">
+          <div class="p-label">Support</div>
+          <div class="p-sups${info.payment ? '' : ' two'}">
+            ${line(P_ICON.phone, 'Call us', s.phone)}
+            ${line(P_ICON.chat, 'WhatsApp', s.whatsapp)}
+            ${line(P_ICON.clock, 'Working hours', s.hours)}
+            ${line(P_ICON.mailsm, 'Email', s.email)}
+          </div>
+        </div>`);
+    }
+    if (info.qr) cards.push(`<div class="p-icard qr">${qrImg(info.qr.url, 'p-qr')}<b>${esc(info.qr.title)}</b><small>${esc(info.qr.sub)}</small></div>`);
+    add(`<div class="p-info n${cards.length}${info.qr ? ' has-qr' : ''}${info.payment ? ' has-pay' : ''}">${cards.join('')}</div>`);
   }
 
   // Terms, in chunks so long lists can flow across pages

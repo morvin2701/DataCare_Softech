@@ -56,6 +56,51 @@ function headerContacts(d, S) {
 /** A fully paid invoice: nothing is payable any more, so the documents say "Paid" instead of "Payable". */
 const isPaidInvoice = d => d.type === 'invoice' && d.status === 'Paid';
 
+/* ---------- QR code (drawn as an SVG image so it prints and exports like the other artwork) ---------- */
+const _qrCache = {};
+function qrImg(text, cls) {
+  if (typeof qrcode !== 'function' || !text) return '';
+  if (!_qrCache[text]) {
+    const q = qrcode(0, 'M'); q.addData(text); q.make();
+    const n = q.getModuleCount();
+    let path = '';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) path += `M${c} ${r}h1v1h-1z`;
+    const m = 2;   // quiet zone
+    _qrCache[text] = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-m} ${-m} ${n + 2 * m} ${n + 2 * m}" shape-rendering="crispEdges"><rect x="${-m}" y="${-m}" width="${n + 2 * m}" height="${n + 2 * m}" fill="#fff"/><path d="${path}" fill="#1B2A4A"/></svg>`)}`;
+  }
+  return `<img class="${cls}" src="${_qrCache[text]}" alt="QR code">`;
+}
+
+/**
+ * What the "payment received / support / QR" section shows, for both designs.
+ * - payment: only on invoices that are Paid (or Partially Paid with an advance)
+ * - support + qr: when "Show support details & QR code" is on (default: invoices)
+ */
+function infoSection(d, S) {
+  const T = docTotals(d);
+  const pay = d.payment || {};
+  let payment = null;
+  if (isPaidInvoice(d)) payment = { title: 'Payment Received', amount: T.total, note: 'Paid in full. Thank you for your payment.' };
+  else if (d.type === 'invoice' && d.status === 'Partially Paid' && T.adv) payment = { title: 'Advance Received', amount: T.adv, balance: T.balance };
+  if (payment) Object.assign(payment, { date: pay.date || '', mode: pay.mode || '', ref: pay.ref || '' });
+
+  const on = d.showSupport === undefined ? d.type === 'invoice' : !!d.showSupport;
+  let support = null, qr = null;
+  if (on) {
+    const sup = S.support || {};
+    const phone = (sup.phone || '').trim() || S.branches[d.branch].phone;
+    const whatsapp = (sup.whatsapp || '').trim() || phone;
+    support = { phone, whatsapp, hours: (sup.hours || '').trim(), email: (S.email || '').trim() };
+    const target = S.qrTarget || 'whatsapp';
+    const waDigits = whatsapp.replace(/\D/g, '');
+    const site = (S.website || '').trim();
+    if (target === 'whatsapp' && waDigits) qr = { url: 'https://wa.me/' + waDigits, title: 'Scan to chat', sub: 'WhatsApp support' };
+    else if (target === 'website' && site) qr = { url: /^https?:\/\//i.test(site) ? site : 'https://' + site, title: 'Scan to visit', sub: site.replace(/^https?:\/\//i, '') };
+  }
+  return payment || support ? { payment, support, qr } : null;
+}
+
 function docTotals(d) {
   const sub = round2(d.items.reduce((s, it) => s + (Number(it.amount) || 0), 0));
   const disc = Math.min(round2(d.discount), sub);
@@ -195,6 +240,21 @@ function buildBlocks(d, S) {
     });
   };
   if (d.showHardware) bullets('Hardware Configuration:', d.hardware);
+
+  // Payment received / support / QR code
+  const info = infoSection(d, S);
+  if (info) {
+    const row = (k, v) => (v ? `<div><span>${k}:</span> ${esc(v)}</div>` : '');
+    const cells = [];
+    if (info.payment) cells.push(`<td><b class="info-h paid">${info.payment.title}</b>
+        ${row('Amount', `${cur} ${fmtMoney(info.payment.amount, cur)}`)}${row('Date', fmtDate(info.payment.date))}${row('Mode', info.payment.mode)}${row('Reference', info.payment.ref)}
+        ${info.payment.balance !== undefined ? row('Balance due', `${cur} ${fmtMoney(info.payment.balance, cur)}`) : `<div class="info-note">${esc(info.payment.note)}</div>`}</td>`);
+    if (info.support) cells.push(`<td><b class="info-h">Support</b>
+        ${row('Phone', info.support.phone)}${info.support.whatsapp !== info.support.phone ? row('WhatsApp', info.support.whatsapp) : ''}${row('Email', info.support.email)}${row('Hours', info.support.hours)}</td>`);
+    if (info.qr) cells.push(`<td class="info-qr">${qrImg(info.qr.url, 'qr')}<div><b>${esc(info.qr.title)}</b><br>${esc(info.qr.sub)}</div></td>`);
+    add(`<table class="info"><tr>${cells.join('')}</tr></table>`);
+  }
+
   bullets('Our Terms &amp; Conditions:', d.terms, { breakBefore: d.termsNewPage });
 
   // Prepared by
