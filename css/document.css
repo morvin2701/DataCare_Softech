@@ -466,3 +466,11 @@
 .page .comp th, .page .comp td { padding-top: 1px; padding-bottom: 1px; line-height: 1.18; }
 .page .comp th { padding: 2px 1px; }
 .page .comp-sub { margin-bottom: 8px; }
+
+/* version strip: boxes size to their name (no clipping); wrap to a second row only when needed */
+.tpl-premium .p-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.tpl-premium .p-chip {
+  flex: 1 1 auto; min-width: max-content; overflow: visible; text-overflow: clip;
+  padding: 6px 9px; gap: 5px; font-size: 9px; letter-spacing: .3px; line-height: 1;
+}
+.tpl-premium .p-chip i { width: 11px; height: 11px; line-height: 9px; }

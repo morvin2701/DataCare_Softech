@@ -143,7 +143,7 @@ function buildBlocksPremium(d, S) {
   if (eds.length) {
     add(`<div class="p-editions">
         <div class="p-label">Software Version${d.softwareVersion ? ` <em>· ${esc(d.softwareVersion)}</em>` : ''}</div>
-        <div class="p-chips" style="grid-template-columns: repeat(${eds.length}, minmax(0, 1fr))">${eds.map(e => {
+        <div class="p-chips">${eds.map(e => {
           const on = e === d.edition;
           return `<span class="p-chip${on ? ' on' : ''}"><i>${on ? '✓' : ''}</i>${esc(e)}</span>`;
         }).join('')}</div>
