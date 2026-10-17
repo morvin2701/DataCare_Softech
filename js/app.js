@@ -350,13 +350,22 @@ function syncForm() {
 
 /* ----- comparison list: per-document on/off choices ----- */
 function compOptsHTML(d) {
-  const eds = editionList(S);
+  const src = compSource(d, S);
+  const eds = src.editions.map(e => String(e || '').trim()).filter(Boolean);
   const hideC = new Set(d.compHideCols || []), hideR = new Set(d.compHideRows || []);
-  const groups = (S.comparison || []).map(g => ({ ...g, rows: (g.rows || []).filter(r => String(r.name || '').trim()) })).filter(g => g.rows.length);
+  const groups = src.groups.map(g => ({ ...g, rows: (g.rows || []).filter(r => String(r.name || '').trim()) })).filter(g => g.rows.length);
   const total = groups.reduce((s, g) => s + g.rows.length, 0);
   const shown = groups.reduce((s, g) => s + g.rows.filter(r => !hideR.has(r.id)).length, 0);
   const wasOpen = $('#compOpts details[open]') ? ' open' : '';
   return `
+    <div class="comp-custom${src.custom ? ' on' : ''}">
+      ${src.custom
+        ? `<span class="badge-custom">✎ Custom list for this ${d.type === 'invoice' ? 'invoice' : 'quotation'}</span>
+           <button type="button" class="btn sm" data-comp-edit>Edit list</button>
+           <button type="button" class="btn link sm" data-comp-reset>Reset to default</button>`
+        : `<button type="button" class="btn sm" data-comp-edit>✎ Edit list for this ${d.type === 'invoice' ? 'invoice' : 'quotation'}</button>
+           <span class="hint">Change values, rename or add features – only for this document.</span>`}
+    </div>
     <div class="hint">Versions (columns) to compare – the chosen version is highlighted</div>
     <div class="comp-cols">${eds.map(e => `<label class="chip-chk${e === d.edition ? ' chosen' : ''}"><input type="checkbox" data-comp-col="${esc(e)}"${hideC.has(e) ? '' : ' checked'}><span>${esc(e)}</span></label>`).join('')}</div>
     <div class="comp-quick">
@@ -383,6 +392,7 @@ function refreshCompOpts() {
   $$('input[data-partial]', box).forEach(i => { i.indeterminate = true; });
   if (readOnly) $$('input, button', box).forEach(el => { el.disabled = true; });
 }
+
 
 function setHidden(listKey, id, hide) {
   const set = new Set(doc[listKey] || []);
@@ -502,7 +512,7 @@ function bindForm() {
       setHidden('compHideRows', el.dataset.compRow, !el.checked);
       refreshCompOpts();
     } else if (el.dataset.compGroup !== undefined) {
-      const g = (S.comparison || []).find(x => x.id === el.dataset.compGroup);
+      const g = compSource(doc, S).groups.find(x => x.id === el.dataset.compGroup);
       (g ? g.rows : []).forEach(r => setHidden('compHideRows', r.id, !el.checked));
       refreshCompOpts();
     } else if (el.dataset.f) {
@@ -522,15 +532,17 @@ function bindForm() {
   form.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.compEdit !== undefined) { startDocCompEdit(); return; }
+    if (b.dataset.compReset !== undefined) { resetDocComp(); return; }
     if (b.dataset.compCols || b.dataset.compRows) {
-      const eds = editionList(S);
+      const eds = compSource(doc, S).editions.map(e => String(e || '').trim()).filter(Boolean);
       if (b.dataset.compCols === 'all') doc.compHideCols = [];
       if (b.dataset.compCols === 'near') {
         const i = eds.indexOf(doc.edition);
         doc.compHideCols = eds.filter((_, j) => Math.abs(j - i) > 1);
       }
       if (b.dataset.compRows === 'all') doc.compHideRows = [];
-      if (b.dataset.compRows === 'none') doc.compHideRows = (S.comparison || []).flatMap(g => (g.rows || []).map(r => r.id));
+      if (b.dataset.compRows === 'none') doc.compHideRows = compSource(doc, S).groups.flatMap(g => (g.rows || []).map(r => r.id));
       refreshCompOpts(); changed();
       return;
     }
@@ -1113,16 +1125,23 @@ function refreshQrPreview() {
 const normCell = v => { const t = String(v || '').trim(); return /^(v|√|✓|y)$/i.test(t) ? '√' : /^(x|✗)$/i.test(t) ? 'X' : t; };
 const cellClass = v => { const x = compCell(v).cls; return x === 'txt' ? '' : x; };
 
-function cmpEditorHTML() {
-  const eds = S.editions || [];
-  const groups = S.comparison || [];
+/* A comparison-table editor used in two places:
+   - Settings: the team default (versions can be renamed / added / removed)
+   - one document: its own copy (versions fixed; only features and values change) */
+function cmpTarget(where) {
+  if (where === 'doc') return { where, eds: doc.compCustom.editions, groups: doc.compCustom.groups, versions: false, root: '#cmpDocEditor' };
+  return { where: 'settings', eds: S.editions, groups: S.comparison, versions: true, root: '#cmpEditor' };
+}
+
+function cmpEditorHTML(t) {
+  const { eds, groups } = t;
   return `
-    <div class="hint">Versions – rename, remove or add. Their order is the order on documents.</div>
+    ${t.versions ? `<div class="hint">Versions – rename, remove or add. Their order is the order on documents.</div>
     <div class="ver-names">
       ${eds.map((e, i) => `<span class="ver-pill"><input data-ed="${i}" value="${esc(e)}" aria-label="Version ${i + 1}"><button type="button" data-ed-del="${i}" title="Remove version" aria-label="Remove version">×</button></span>`).join('')}
-      <button type="button" class="btn sm" id="edAdd">+ Add version</button>
-    </div>
-    <div class="hint" style="margin-top:16px">Comparison list – type <b>v</b> (✓ included), <b>x</b> (✗ not included), <b>+</b> (add-on) or any text such as YES, NO, MULTI, 2.</div>
+      <button type="button" class="btn sm" data-cmp="edAdd">+ Add version</button>
+    </div>` : ''}
+    <div class="hint" style="margin-top:${t.versions ? 16 : 0}px">Type <b>v</b> (✓ included), <b>x</b> (✗ not included), <b>+</b> (add-on) or any text such as YES, NO, MULTI, 2.</div>
     <div class="table-wrap cmp-wrap">
       <table class="cmp-edit">
         <thead><tr><th class="cf">Feature</th>${eds.map(e => `<th>${esc(e)}</th>`).join('')}<th class="cd"></th></tr></thead>
@@ -1143,36 +1162,42 @@ function cmpEditorHTML() {
     </div>
     <datalist id="cvList"><option value="√"><option value="X"><option value="+"><option value="YES"><option value="NO"><option value="MULTI"></datalist>
     <div class="sect-foot" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="btn sm" id="cgAdd">+ Add group</button>
-      <button type="button" class="btn link sm" id="cmpReset">Restore original versions &amp; list</button>
+      <button type="button" class="btn sm" data-cmp="cgAdd">+ Add group</button>
+      ${t.versions ? '<button type="button" class="btn link sm" data-cmp="reset">Restore original versions &amp; list</button>' : ''}
     </div>`;
 }
 
-function refreshCmpEditor() {
-  const box = $('#cmpEditor');
-  if (box) box.innerHTML = cmpEditorHTML();
+function refreshCmpEditor(where = 'settings') {
+  const t = cmpTarget(where);
+  const box = $(t.root);
+  if (box && (where === 'settings' || doc.compCustom)) box.innerHTML = cmpEditorHTML(t);
 }
 
-/** Settings > Versions & comparison: edits. Returns true when the event was handled. */
-function cmpInput(el) {
-  const S_ = S;
-  if (el.dataset.ed !== undefined) {
-    const i = +el.dataset.ed, old = S_.editions[i], nu = el.value;
-    S_.editions[i] = nu;
-    // keep documents' column choices pointing at the renamed version
-    if (doc.edition === old) doc.edition = nu;
-    $$('.cmp-edit thead th')[i + 1].textContent = nu;
+/** Saves a change from either editor. */
+function cmpChanged(t, msg) {
+  if (t.where === 'settings') settingsChanged(msg);
+  else { changed(); refreshCompOpts(); }
+}
+
+/** Typing in a table editor. Returns true when the event was handled. */
+function cmpInput(el, t) {
+  const { eds, groups } = t;
+  if (el.dataset.ed !== undefined && t.versions) {
+    const i = +el.dataset.ed, old = eds[i], nu = el.value;
+    eds[i] = nu;
+    if (doc.edition === old) doc.edition = nu;   // keep the open document pointing at the renamed version
+    $$(`${t.root} .cmp-edit thead th`)[i + 1].textContent = nu;
     return true;
   }
-  if (el.dataset.cg !== undefined) { S_.comparison[+el.dataset.cg].name = el.value; return true; }
-  if (el.dataset.cgNum !== undefined) { S_.comparison[+el.dataset.cgNum].numbered = el.checked; return true; }
-  if (el.dataset.cr !== undefined) { const [g, r] = el.dataset.cr.split(':').map(Number); S_.comparison[g].rows[r].name = el.value; return true; }
+  if (el.dataset.cg !== undefined) { groups[+el.dataset.cg].name = el.value; return true; }
+  if (el.dataset.cgNum !== undefined) { groups[+el.dataset.cgNum].numbered = el.checked; return true; }
+  if (el.dataset.cr !== undefined) { const [g, r] = el.dataset.cr.split(':').map(Number); groups[g].rows[r].name = el.value; return true; }
   if (el.dataset.cv !== undefined) {
     const [g, r, v] = el.dataset.cv.split(':').map(Number);
     const val = normCell(el.value);
     if (val !== el.value && /^[vVxXyY✓✗]$/.test(el.value.trim())) el.value = val;
-    const row = S_.comparison[g].rows[r];
-    while (row.values.length < S_.editions.length) row.values.push('');
+    const row = groups[g].rows[r];
+    while (row.values.length < eds.length) row.values.push('');
     row.values[v] = val;
     el.className = 'cv ' + cellClass(val);
     return true;
@@ -1180,31 +1205,62 @@ function cmpInput(el) {
   return false;
 }
 
-async function cmpClick(b) {
-  const eds = S.editions, groups = S.comparison;
-  if (b.id === 'edAdd') { eds.push('New version'); groups.forEach(g => g.rows.forEach(r => r.values.push(''))); }
-  else if (b.dataset.edDel !== undefined) {
+/** Buttons in a table editor. Returns true when the click was handled. */
+async function cmpClick(b, t) {
+  const { eds, groups } = t;
+  const scope = t.where === 'settings' ? 'for this team' : 'from this document only';
+  const act = b.dataset.cmp;
+  if (act === 'edAdd' && t.versions) { eds.push('New version'); groups.forEach(g => g.rows.forEach(r => r.values.push(''))); }
+  else if (b.dataset.edDel !== undefined && t.versions) {
     const i = +b.dataset.edDel;
     if (!(await ask({ title: `Remove “${eds[i]}”?`, message: 'The version and its column in the comparison list are removed for this team.', ok: 'Remove', danger: true }))) return true;
     eds.splice(i, 1); groups.forEach(g => g.rows.forEach(r => r.values.splice(i, 1)));
   }
   else if (b.dataset.crAdd !== undefined) groups[+b.dataset.crAdd].rows.push({ id: uid(), name: '', values: eds.map(() => '') });
   else if (b.dataset.crDel !== undefined) { const [g, r] = b.dataset.crDel.split(':').map(Number); groups[g].rows.splice(r, 1); }
-  else if (b.id === 'cgAdd') groups.push({ id: uid(), name: 'New group', numbered: true, rows: [{ id: uid(), name: '', values: eds.map(() => '') }] });
+  else if (act === 'cgAdd') groups.push({ id: uid(), name: 'New group', numbered: true, rows: [{ id: uid(), name: '', values: eds.map(() => '') }] });
   else if (b.dataset.cgDel !== undefined) {
     const g = groups[+b.dataset.cgDel];
-    if (!(await ask({ title: `Delete group “${g.name}”?`, message: `Its ${g.rows.length} feature(s) are removed from the comparison list for this team.`, ok: 'Delete', danger: true }))) return true;
+    if (!(await ask({ title: `Delete group “${g.name}”?`, message: `Its ${g.rows.length} feature(s) are removed ${scope}.`, ok: 'Delete', danger: true }))) return true;
     groups.splice(+b.dataset.cgDel, 1);
   }
-  else if (b.id === 'cmpReset') {
+  else if (act === 'reset' && t.versions) {
     if (!(await ask({ title: 'Restore the original list?', message: 'Versions and the comparison list go back to the original (from your features PDF). Your changes to them are lost.', ok: 'Restore', danger: true }))) return true;
     S.editions = clone(DEFAULT_EDITIONS); S.comparison = clone(DEFAULT_COMPARISON);
   }
   else return false;
-  refreshCmpEditor();
-  if (b.dataset.crAdd !== undefined) { const ins = $$(`[data-cr^="${b.dataset.crAdd}:"]`); if (ins.length) ins[ins.length - 1].focus(); }
-  settingsChanged();
+  refreshCmpEditor(t.where);
+  if (b.dataset.crAdd !== undefined) { const ins = $$(`${t.root} [data-cr^="${b.dataset.crAdd}:"]`); if (ins.length) ins[ins.length - 1].focus(); }
+  cmpChanged(t);
   return true;
+}
+
+/* ----- a document's own copy of the list ----- */
+async function startDocCompEdit() {
+  if (!doc.compCustom) {
+    doc.compCustom = { editions: clone(S.editions || []), groups: clone(S.comparison || []) };
+    changed(); refreshCompOpts();
+  }
+  refreshCmpEditor('doc');
+  $('#cmpDlgTitle').textContent = `Comparison list for this ${doc.type === 'invoice' ? 'invoice' : 'quotation'}${doc.customer.company ? ' – ' + doc.customer.company : ''}`;
+  $('#cmpDlg').showModal();
+}
+
+async function resetDocComp() {
+  if (!(await ask({ title: 'Go back to the default list?', message: 'Your changes to the comparison list of this document are removed. The default list from Settings is used again.', ok: 'Use default list', danger: true }))) return;
+  doc.compCustom = null;
+  changed(); refreshCompOpts();
+}
+
+function bindDocCompEditor() {
+  const dlg = $('#cmpDlg');
+  dlg.addEventListener('input', e => { if (doc.compCustom && cmpInput(e.target, cmpTarget('doc'))) cmpChanged(cmpTarget('doc')); });
+  dlg.addEventListener('click', async e => {
+    if (e.target.closest('#cmpDlgClose')) { dlg.close(); return; }
+    const b = e.target.closest('#cmpDocEditor button');
+    if (b && doc.compCustom) await cmpClick(b, cmpTarget('doc'));
+  });
+  dlg.addEventListener('close', () => { renderPreview(); refreshCompOpts(); });
 }
 
 function refreshSecondNumber() {
@@ -1459,7 +1515,7 @@ function bindSettings() {
   const p = $('#settingsPanel');
   p.addEventListener('input', e => {
     const el = e.target;
-    if (cmpInput(el)) { settingsChanged(); return; }
+    if (cmpInput(el, cmpTarget('settings'))) { settingsChanged(); return; }
     if (el.dataset.preset !== undefined) {
       const it = S.presets[+el.dataset.preset];
       it[el.dataset.k] = el.dataset.k === 'desc' ? el.value : (parseFloat(el.value) || 0);
@@ -1506,7 +1562,7 @@ function bindSettings() {
   });
   p.addEventListener('click', async e => {
     const cb = e.target.closest('#cmpEditor button');
-    if (cb && await cmpClick(cb)) return;
+    if (cb && await cmpClick(cb, cmpTarget('settings'))) return;
     const nav = e.target.closest('.settings-nav a');
     if (nav) {
       e.preventDefault();
@@ -1895,6 +1951,7 @@ async function init() {
   window.addEventListener('online', () => API.flush());
 
   bindForm();
+  bindDocCompEditor();
   bindDocs();
   bindSettings();
   bindTeam();

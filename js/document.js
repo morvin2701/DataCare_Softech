@@ -115,12 +115,20 @@ const editionList = S => (S.editions || []).map(e => String(e || '').trim()).fil
 const showEditionsOn = d => d.showEditions !== false;
 
 /** Columns, groups and rows of the comparison list for one document (respecting its on/off choices). */
+/** A document's own copy of the list (made with "Edit list for this quotation"), else the team default. */
+function compSource(d, S) {
+  return d.compCustom && Array.isArray(d.compCustom.groups)
+    ? { editions: d.compCustom.editions || [], groups: d.compCustom.groups, custom: true }
+    : { editions: S.editions || [], groups: S.comparison || [], custom: false };
+}
+
 function comparisonModel(d, S) {
-  const eds = (S.editions || []).map(e => String(e || '').trim());
+  const src = compSource(d, S);
+  const eds = src.editions.map(e => String(e || '').trim());
   const hideCols = new Set(d.compHideCols || []), hideRows = new Set(d.compHideRows || []);
   const cols = eds.map((name, i) => ({ name, i })).filter(c => c.name && !hideCols.has(c.name));
   let n = 0;
-  const groups = (S.comparison || []).map(g => {
+  const groups = src.groups.map(g => {
     const rows = [];
     for (const r of g.rows || []) {
       if (!String(r.name || '').trim() || hideRows.has(r.id)) continue;
