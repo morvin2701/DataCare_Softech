@@ -130,13 +130,25 @@ function buildBlocksPremium(d, S) {
         <div class="p-label">Order Details</div>
         <div class="p-kv">
           <span>Customer</span><b><span class="p-pill${d.customerType === 'existing' ? ' blue' : ''}">${d.customerType === 'existing' ? 'Existing Customer' : 'New Customer'}</span></b>
-          ${d.showVersion && d.softwareVersion ? `<span>Software</span><b>${esc(d.softwareVersion)}</b>` : ''}
+          ${d.showVersion && d.softwareVersion ? `<span>Software</span><b>${esc(d.softwareVersion)}${d.edition ? ' ' + esc(d.edition) : ''}</b>` : ''}
           <span>Prepared by</span><b>${esc(d.preparedBy)}</b>
           <span>Mobile</span><b>${esc(d.preparedMobile)}</b>
           ${d.fromQuotation ? `<span>Quotation Ref.</span><b>${esc(d.fromQuotation)}</b>` : ''}
         </div>
       </div>
     </div>`);
+
+  // Software version strip: every version, the chosen one ticked
+  const eds = showEditionsOn(d) ? editionList(S) : [];
+  if (eds.length) {
+    add(`<div class="p-editions">
+        <div class="p-label">Software Version${d.softwareVersion ? ` <em>· ${esc(d.softwareVersion)}</em>` : ''}</div>
+        <div class="p-chips" style="grid-template-columns: repeat(${eds.length}, minmax(0, 1fr))">${eds.map(e => {
+          const on = e === d.edition;
+          return `<span class="p-chip${on ? ' on' : ''}"><i>${on ? '✓' : ''}</i>${esc(e)}</span>`;
+        }).join('')}</div>
+      </div>`);
+  }
 
   // Items
   const items = d.items.filter(it => it.desc || Number(it.amount));
@@ -233,7 +245,8 @@ function buildBlocksPremium(d, S) {
     add(`<div class="p-prep">
         <div><div class="p-label">Prepared By</div><b>${esc(d.preparedBy)}</b><span>${esc(d.preparedMobile)}</span></div>
         <div class="p-thanks">Thank you for choosing ${esc(S.companyName)}!</div>
-      </div>`);
+      </div>`, d.type === 'quotation' ? { preferFirst: true } : {});
+    addComparisonPremium(d, S, add);
     return blocks;
   }
   const stamp = d.showStamp && S.stamp ? `<img class="p-stamp-img" src="${S.stamp}" alt="">` : '';
@@ -255,6 +268,7 @@ function buildBlocksPremium(d, S) {
         <small>For any queries, contact ${esc(d.preparedBy)} on ${esc(d.preparedMobile)}.</small>
       </div>`;
   add(`<div class="p-sign">${left}${right}</div>`);
+  addComparisonPremium(d, S, add);
   return blocks;
 }
 
@@ -268,5 +282,28 @@ function fitContacts(page) {
     bar.style.removeProperty('--ct-fs');
     bar.classList.add('two-rows');
     page.classList.add('ct2');
+  }
+}
+
+/** Version comparison list, attached on new page(s) at the end of the document. */
+function addComparisonPremium(d, S, add) {
+  if (!d.showComparison) return;
+  const m = comparisonModel(d, S);
+  if (!m.cols.length || !m.groups.length) return;
+  add(`<div class="p-comp-head">
+      <div><div class="p-label">Attachment</div><h2>Version Comparison</h2>
+        <p>${esc(d.softwareVersion || '')} – features included in each version${m.chosen ? `. Chosen version: <b>${esc(m.chosen)}</b>` : ''}</p></div>
+      <div class="p-comp-legend"><span><b class="ok">✓</b> Included</span><span><b class="no">✗</b> Not included</span><span><b class="add">+</b> Add-on (chargeable)</span></div>
+    </div>`, { forceBreak: true });
+  const head = (ch, cont) => `<tr class="gh"><th class="f">${esc(ch.group.name)}${cont ? ' <em>(cont.)</em>' : ''}</th>${m.cols.map(c => `<th class="${c.name === m.chosen ? 'on' : ''}">${esc(c.name)}</th>`).join('')}</tr>`;
+  const body = ch => ch.rows.map(r => `<tr><td class="f">${r.num ? `<span class="n">${r.num}</span>` : ''}${esc(r.name)}</td>${m.cols.map(c => {
+    const x = compCell(r.values[c.i]);
+    return `<td class="${x.cls}${c.name === m.chosen ? ' on' : ''}">${x.html}</td>`;
+  }).join('')}</tr>`).join('');
+  // groups are cut into small chunks so they can continue on the next page; chunks on the same page join up
+  for (const ch of comparisonChunks(m)) {
+    const cls = `p-comp${ch.first ? '' : ' join'}${ch.last ? '' : ' open'}`;
+    add(`<table class="${cls}">${ch.first ? head(ch, false) : ''}${body(ch)}</table>`,
+      ch.first ? {} : { contHtml: `<table class="p-comp${ch.last ? '' : ' open'}">${head(ch, true)}${body(ch)}</table>` });
   }
 }

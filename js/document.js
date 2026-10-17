@@ -110,6 +110,47 @@ function infoSection(d, S) {
   return payment || support ? { payment, support, qr } : null;
 }
 
+/* ---------- software versions + comparison list ---------- */
+const editionList = S => (S.editions || []).map(e => String(e || '').trim()).filter(Boolean);
+const showEditionsOn = d => d.showEditions !== false;
+
+/** Columns, groups and rows of the comparison list for one document (respecting its on/off choices). */
+function comparisonModel(d, S) {
+  const eds = (S.editions || []).map(e => String(e || '').trim());
+  const hideCols = new Set(d.compHideCols || []), hideRows = new Set(d.compHideRows || []);
+  const cols = eds.map((name, i) => ({ name, i })).filter(c => c.name && !hideCols.has(c.name));
+  let n = 0;
+  const groups = (S.comparison || []).map(g => {
+    const rows = [];
+    for (const r of g.rows || []) {
+      if (!String(r.name || '').trim() || hideRows.has(r.id)) continue;
+      rows.push({ ...r, num: g.numbered === false ? '' : ++n });
+    }
+    return { ...g, rows };
+  }).filter(g => g.rows.length);
+  return { cols, groups, chosen: d.edition || '' };
+}
+
+/** One comparison cell: √ / X / + become symbols, anything else is shown as typed. */
+function compCell(v) {
+  const t = String(v ?? '').trim();
+  if (t === '√' || /^v$/i.test(t)) return { cls: 'ok', html: '✓' };
+  if (/^x$/i.test(t)) return { cls: 'no', html: '✗' };
+  if (t === '+') return { cls: 'add', html: '+' };
+  if (!t) return { cls: 'na', html: '–' };
+  return { cls: 'txt', html: esc(t) };
+}
+
+/** Splits each group into small chunks so groups can continue across pages.
+    first: chunk starts the group (has the heading row); last: chunk ends the group. */
+function comparisonChunks(model, size = 5) {
+  const out = [];
+  for (const g of model.groups) for (let i = 0; i < g.rows.length; i += size) {
+    out.push({ group: g, rows: g.rows.slice(i, i + size), first: i === 0, last: i + size >= g.rows.length });
+  }
+  return out;
+}
+
 function docTotals(d) {
   const sub = round2(d.items.reduce((s, it) => s + (Number(it.amount) || 0), 0));
   const disc = Math.min(round2(d.discount), sub);
@@ -206,12 +247,17 @@ function buildBlocks(d, S) {
   const custType = `<span class="ctype">${checkbox(d.customerType === 'existing')} Existing Customer
       &nbsp;&nbsp; ${checkbox(d.customerType === 'new')} New Customer</span>`;
 
+  const eds = showEditionsOn(d) ? editionList(S) : [];
+  const edRow = eds.length ? `<table class="ver eds"><tr><td class="prod">${esc(d.softwareVersion)}</td>${eds.map(e =>
+    `<td class="${e === d.edition ? 'on' : ''}">${checkbox(e === d.edition)} ${esc(e)}</td>`).join('')}</tr></table>` : '';
   if (d.showVersion) {
     add(`<h3 class="sec-h">Software Version:</h3>
       <div class="ctype-row">${custType}</div>
-      <table class="ver"><tr><td>${esc(d.softwareVersion)}</td><td></td><td></td></tr></table>`);
+      ${edRow || `<table class="ver"><tr><td>${esc(d.softwareVersion)}${d.edition ? ' ' + esc(d.edition) : ''}</td><td></td><td></td></tr></table>`}`);
     add(`<h3 class="sec-h">Order Details are as per under:</h3>`, { keepWithNext: true });
   } else {
+    if (eds.length) add(`<table class="ver eds one"><tr><td class="prod">Software Version:<br><b>${esc(d.softwareVersion)}</b></td>${eds.map(e =>
+      `<td class="${e === d.edition ? 'on' : ''}">${checkbox(e === d.edition)} ${esc(e)}</td>`).join('')}</tr></table>`);
     add(`<h3 class="sec-h inline"><span>Order Details are as per under:</span></h3>${custType}`, { keepWithNext: true, cls: 'order-h' });
   }
 
@@ -283,7 +329,7 @@ function buildBlocks(d, S) {
       <div>Prepared By: ${esc(d.preparedBy)}</div>
       <div>Mobile: ${esc(d.preparedMobile)}</div>
     </div>
-    ${d.showStamp && S.stamp ? `<div class="stamp-wrap"><img class="stamp" src="${S.stamp}" alt=""><div class="stamp-cap">For ${esc(S.legalName)}</div></div>` : ''}`);
+    ${d.showStamp && S.stamp ? `<div class="stamp-wrap"><img class="stamp" src="${S.stamp}" alt=""><div class="stamp-cap">For ${esc(S.legalName)}</div></div>` : ''}`, d.type === 'quotation' ? { preferFirst: true } : {});
 
   if (d.showAcceptance) {
     add(`<div class="accept">
@@ -291,6 +337,22 @@ function buildBlocks(d, S) {
         <div class="sign-space"></div>
         <div class="sign-line">Customer Signature &amp; Stamp</div>
       </div>`);
+  }
+
+  // Version comparison list (attachment, starts on a new page)
+  if (d.showComparison) {
+    const m = comparisonModel(d, S);
+    if (m.cols.length && m.groups.length) {
+      add(`<h1 class="comp-title">Version Comparison – ${esc(d.softwareVersion)}</h1>
+        <p class="comp-sub">${m.chosen ? `Chosen version: <b>${esc(m.chosen)}</b> &nbsp;·&nbsp; ` : ''}√ included &nbsp; X not included &nbsp; + add-on (chargeable)</p>`, { forceBreak: true });
+      const head = (ch, cont) => `<tr class="gh"><th class="f">${esc(ch.group.name)}${cont ? ' (cont.)' : ''}</th>${m.cols.map(c => `<th class="${c.name === m.chosen ? 'on' : ''}">${esc(c.name)}</th>`).join('')}</tr>`;
+      const body = ch => ch.rows.map(r => `<tr><td class="f">${r.num ? `<span class="n">${r.num}</span>` : ''}${esc(r.name)}</td>${m.cols.map(c => { const x = compCell(r.values[c.i]); return `<td class="${x.cls}${c.name === m.chosen ? ' on' : ''}">${x.html}</td>`; }).join('')}</tr>`).join('');
+      for (const ch of comparisonChunks(m)) {
+        const cls = `comp${ch.first ? '' : ' join'}${ch.last ? '' : ' open'}`;
+        add(`<table class="${cls}">${ch.first ? head(ch, false) : ''}${body(ch)}</table>`,
+          ch.first ? {} : { contHtml: `<table class="comp${ch.last ? '' : ' open'}">${head(ch, true)}${body(ch)}</table>` });
+      }
+    }
   }
   return blocks;
 }
@@ -330,6 +392,7 @@ function renderPages(d, S, container) {
       // "Start on a new page" keeps page 1 free of terms. If earlier content already ran onto page 2,
       // the terms simply follow it there instead of leaving that page almost empty.
       if (b.breakBefore && body.children.length && container.children.length === 1) next();
+      if (b.forceBreak && body.children.length) next();   // attachments such as the comparison list
 
       const group = [b];
       // keep headings with the following block
@@ -345,6 +408,8 @@ function renderPages(d, S, container) {
       if (overflows() && body.children.length > els.length) {
         els.forEach(el => el.remove());
         next();
+        // a block that continues something (e.g. a comparison group) gets its heading back at the top of the page
+        group.forEach((g, k) => { if (g.contHtml) els[k].innerHTML = g.contHtml; });
         els.forEach(el => body.appendChild(el));
       }
       if (group.some(g => g.preferFirst) && container.children.length > 1) firstPageOk = false;

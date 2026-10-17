@@ -132,6 +132,7 @@ function newDoc(type, branch) {
     customer: { company: '', contact: '', address: '', city: '', country: branch === 'IN' ? 'India' : 'UAE', mobile: '', email: '', taxId: '' },
     customerType: 'new',
     showVersion: type === 'invoice', softwareVersion: S.softwareVersions[0] || 'DataCare Next',
+    edition: '', showEditions: true, showComparison: false, compHideCols: [], compHideRows: [],
     items: [{ desc: '', amount: 0 }],
     discount: 0, taxEnabled: false, taxLabel: b.taxLabel, taxRate: b.taxRate, advance: 0,
     showWords: type === 'invoice', notes: '',
@@ -149,6 +150,10 @@ function newDoc(type, branch) {
 function normalizeDoc(d) {
   if (d.showSupport === undefined) d.showSupport = d.type === 'invoice';
   if (!d.payment || typeof d.payment !== 'object') d.payment = { date: '', mode: '', ref: '' };
+  if (d.showEditions === undefined) d.showEditions = true;
+  if (d.edition === undefined) d.edition = '';
+  if (!Array.isArray(d.compHideCols)) d.compHideCols = [];
+  if (!Array.isArray(d.compHideRows)) d.compHideRows = [];
   return d;
 }
 
@@ -226,10 +231,16 @@ function formHTML(d) {
     <datalist id="countryList"><option value="UAE"><option value="India"><option value="Oman"><option value="Qatar"><option value="Saudi Arabia"><option value="Bahrain"><option value="Kuwait"></datalist>
   </fieldset>
 
-  <fieldset class="fs"><legend>Software</legend>
-    <label class="chk"><input type="checkbox" data-f="showVersion"> Show “Software Version” section</label>
-    <div class="row one"><label class="f">Software Version<input data-f="softwareVersion" list="verList"></label></div>
+  <fieldset class="fs"><legend>Software &amp; Version</legend>
+    <div class="row">
+      <label class="f">Software<input data-f="softwareVersion" list="verList"></label>
+      <label class="f">Version<select data-f="edition"><option value="">— choose —</option>${editionList(S).map(e => opt(e, e, d.edition)).join('')}</select></label>
+    </div>
     <datalist id="verList">${S.softwareVersions.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+    <label class="chk"><input type="checkbox" data-f="showEditions"> Show all versions on the document (the chosen one is ticked)</label>
+    <label class="chk"><input type="checkbox" data-f="showVersion"> Show the software name in “Order Details”</label>
+    <label class="chk"><input type="checkbox" data-f="showComparison"> <b>Attach version comparison list</b> <span class="hint">(added as extra page(s) at the end)</span></label>
+    <div id="compOpts" class="comp-opts"></div>
   </fieldset>
 
   <fieldset class="fs"><legend>Order Details</legend>
@@ -307,6 +318,7 @@ function writeVal(el, v) {
 
 function loadForm() {
   const form = $('#form');
+  setTimeout(refreshCompOpts);
   form.innerHTML = (readOnly ? `<div class="ro-banner">${icon('eye')}<div><b>View only.</b> This ${doc.type} belongs to the ${regionName(doc.branch)} team. You can read it and download the PDF, but not change it.</div></div>` : '') + formHTML(doc);
   renderItems();
   syncForm();
@@ -326,6 +338,7 @@ function syncForm() {
   const uae = /^(uae|u\.a\.e\.?|united arab emirates)$/i.test((doc.customer.country || '').trim());
   $('#cityLbl').textContent = uae ? 'Emirate' : 'City';
   $('#taxRow').style.display = doc.taxEnabled ? '' : 'none';
+  $('#compOpts').style.display = doc.showComparison ? '' : 'none';
   const payOn = doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid');
   $('#payBox').style.display = payOn ? '' : 'none';
   $('#payTitle').textContent = doc.status === 'Partially Paid' ? 'Advance received – printed on the invoice (enter the amount in “Advance received” above)' : 'Payment received – printed on the invoice';
@@ -333,6 +346,48 @@ function syncForm() {
     ? 'Number is assigned automatically when you save. Type your own to override.'
     : (doc.autoNumber ? '' : 'Custom number. Clear the field to go back to automatic numbering.');
   updateSum();
+}
+
+/* ----- comparison list: per-document on/off choices ----- */
+function compOptsHTML(d) {
+  const eds = editionList(S);
+  const hideC = new Set(d.compHideCols || []), hideR = new Set(d.compHideRows || []);
+  const groups = (S.comparison || []).map(g => ({ ...g, rows: (g.rows || []).filter(r => String(r.name || '').trim()) })).filter(g => g.rows.length);
+  const total = groups.reduce((s, g) => s + g.rows.length, 0);
+  const shown = groups.reduce((s, g) => s + g.rows.filter(r => !hideR.has(r.id)).length, 0);
+  const wasOpen = $('#compOpts details[open]') ? ' open' : '';
+  return `
+    <div class="hint">Versions (columns) to compare – the chosen version is highlighted</div>
+    <div class="comp-cols">${eds.map(e => `<label class="chip-chk${e === d.edition ? ' chosen' : ''}"><input type="checkbox" data-comp-col="${esc(e)}"${hideC.has(e) ? '' : ' checked'}><span>${esc(e)}</span></label>`).join('')}</div>
+    <div class="comp-quick">
+      <button type="button" class="btn sm" data-comp-cols="all">All versions</button>
+      <button type="button" class="btn sm" data-comp-cols="near"${d.edition ? '' : ' disabled title="Choose a version first"'}>Chosen ± 1</button>
+    </div>
+    <details class="comp-rows"${wasOpen}>
+      <summary>Features to include <span class="comp-count">${shown} of ${total}</span></summary>
+      <div class="comp-quick"><button type="button" class="btn sm" data-comp-rows="all">Select all</button><button type="button" class="btn sm" data-comp-rows="none">Clear all</button></div>
+      ${groups.map(g => {
+        const on = g.rows.filter(r => !hideR.has(r.id)).length;
+        return `<div class="comp-g">
+          <label class="chk g"><input type="checkbox" data-comp-group="${esc(g.id)}"${on === g.rows.length ? ' checked' : ''}${on && on < g.rows.length ? ' data-partial' : ''}> <b>${esc(g.name)}</b> <span class="hint">${on}/${g.rows.length}</span></label>
+          ${g.rows.map(r => `<label class="chk r"><input type="checkbox" data-comp-row="${esc(r.id)}"${hideR.has(r.id) ? '' : ' checked'}> ${esc(r.name)}</label>`).join('')}
+        </div>`;
+      }).join('')}
+    </details>`;
+}
+
+function refreshCompOpts() {
+  const box = $('#compOpts');
+  if (!box) return;
+  box.innerHTML = compOptsHTML(doc);
+  $$('input[data-partial]', box).forEach(i => { i.indeterminate = true; });
+  if (readOnly) $$('input, button', box).forEach(el => { el.disabled = true; });
+}
+
+function setHidden(listKey, id, hide) {
+  const set = new Set(doc[listKey] || []);
+  hide ? set.add(id) : set.delete(id);
+  doc[listKey] = [...set];
 }
 
 function renderItems() {
@@ -384,6 +439,8 @@ function onField(f, el) {
     if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
   } else if (f === 'date') {
     refreshAutoNumber();
+  } else if (f === 'edition' || f === 'showComparison') {
+    refreshCompOpts();
   } else if (f === 'status') {
     // marking an invoice paid: assume it was paid today unless a date is already entered
     if (doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid') && !doc.payment.date) doc.payment.date = todayISO();
@@ -439,6 +496,15 @@ function bindForm() {
     if (el.dataset.item !== undefined) {
       const it = doc.items[+el.dataset.item];
       it[el.dataset.k] = el.dataset.k === 'amount' ? (parseFloat(el.value) || 0) : el.value;
+    } else if (el.dataset.compCol !== undefined) {
+      setHidden('compHideCols', el.dataset.compCol, !el.checked);
+    } else if (el.dataset.compRow !== undefined) {
+      setHidden('compHideRows', el.dataset.compRow, !el.checked);
+      refreshCompOpts();
+    } else if (el.dataset.compGroup !== undefined) {
+      const g = (S.comparison || []).find(x => x.id === el.dataset.compGroup);
+      (g ? g.rows : []).forEach(r => setHidden('compHideRows', r.id, !el.checked));
+      refreshCompOpts();
     } else if (el.dataset.f) {
       setPath(doc, el.dataset.f, readVal(el));
       onField(el.dataset.f, el);
@@ -456,6 +522,18 @@ function bindForm() {
   form.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.compCols || b.dataset.compRows) {
+      const eds = editionList(S);
+      if (b.dataset.compCols === 'all') doc.compHideCols = [];
+      if (b.dataset.compCols === 'near') {
+        const i = eds.indexOf(doc.edition);
+        doc.compHideCols = eds.filter((_, j) => Math.abs(j - i) > 1);
+      }
+      if (b.dataset.compRows === 'all') doc.compHideRows = [];
+      if (b.dataset.compRows === 'none') doc.compHideRows = (S.comparison || []).flatMap(g => (g.rows || []).map(r => r.id));
+      refreshCompOpts(); changed();
+      return;
+    }
     const seg = b.closest('[data-seg]');
     if (seg) {
       const k = seg.dataset.seg, v = b.dataset.v;
@@ -946,7 +1024,7 @@ function ask({ title, message, ok = 'OK', cancel = 'Cancel', danger = false }) {
 
 /* ---------------- settings ---------------- */
 const SETTINGS_SECTIONS = [
-  ['company', 'Company'], ['branding', 'Branding'], ['branches', 'Branches'], ['support', 'Support & QR code'], ['defaults', 'Document defaults'],
+  ['company', 'Company'], ['branding', 'Branding'], ['branches', 'Branches'], ['support', 'Support & QR code'], ['versions', 'Versions & comparison'], ['defaults', 'Document defaults'],
   ['numbering', 'Numbering'], ['pricelist', 'Price list'], ['text', 'Default text'], ['backup', 'Backup & data']
 ];
 const SICON = {
@@ -954,6 +1032,7 @@ const SICON = {
   branding: '<circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.2" fill="currentColor"/><circle cx="12" cy="7.5" r="1.2" fill="currentColor"/><circle cx="15.5" cy="10" r="1.2" fill="currentColor"/><path d="M12 21a2.5 2.5 0 0 0 0-5h-1.5a1.5 1.5 0 0 1 0-3H14a5 5 0 0 0 5-5"/>',
   branches: '<path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2"/>',
   defaults: '<path d="M4 6h16M4 12h10M4 18h7"/>',
+  versions: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M15 9v11"/>',
   support: '<path d="M4 13v-1a8 8 0 0 1 16 0v1"/><rect x="3" y="13" width="4" height="6" rx="1.500"/><rect x="17" y="13" width="4" height="6" rx="1.500"/><path d="M20 19a4 4 0 0 1-4 3h-3"/>',
   numbering: '<path d="M9 4L7 20M17 4l-2 16M4 9h16M3 15h16"/>',
   pricelist: '<path d="M20 12l-8 8-8-8V4h8z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
@@ -1028,6 +1107,104 @@ function refreshQrPreview() {
   box.innerHTML = info && info.qr
     ? `${qrImg(info.qr.url, 'qr-prev-img')}<div><b>${esc(info.qr.title)}</b><small>Opens: <a href="${esc(info.qr.url)}" target="_blank" rel="noopener">${esc(info.qr.url)}</a></small><small>Scan it with your phone camera to test.</small></div>`
     : '<small>No QR code will be printed.</small>';
+}
+
+/* ----- Settings > Versions & comparison editor ----- */
+const normCell = v => { const t = String(v || '').trim(); return /^(v|√|✓|y)$/i.test(t) ? '√' : /^(x|✗)$/i.test(t) ? 'X' : t; };
+const cellClass = v => { const x = compCell(v).cls; return x === 'txt' ? '' : x; };
+
+function cmpEditorHTML() {
+  const eds = S.editions || [];
+  const groups = S.comparison || [];
+  return `
+    <div class="hint">Versions – rename, remove or add. Their order is the order on documents.</div>
+    <div class="ver-names">
+      ${eds.map((e, i) => `<span class="ver-pill"><input data-ed="${i}" value="${esc(e)}" aria-label="Version ${i + 1}"><button type="button" data-ed-del="${i}" title="Remove version" aria-label="Remove version">×</button></span>`).join('')}
+      <button type="button" class="btn sm" id="edAdd">+ Add version</button>
+    </div>
+    <div class="hint" style="margin-top:16px">Comparison list – type <b>v</b> (✓ included), <b>x</b> (✗ not included), <b>+</b> (add-on) or any text such as YES, NO, MULTI, 2.</div>
+    <div class="table-wrap cmp-wrap">
+      <table class="cmp-edit">
+        <thead><tr><th class="cf">Feature</th>${eds.map(e => `<th>${esc(e)}</th>`).join('')}<th class="cd"></th></tr></thead>
+        ${groups.map((g, gi) => `<tbody>
+          <tr class="cg"><td colspan="${eds.length + 2}">
+            <input class="cg-name" data-cg="${gi}" value="${esc(g.name)}" aria-label="Group name">
+            <label class="chk"><input type="checkbox" data-cg-num="${gi}"${g.numbered === false ? '' : ' checked'}> numbered</label>
+            <button type="button" class="btn link sm danger" data-cg-del="${gi}">Delete group</button>
+          </td></tr>
+          ${(g.rows || []).map((r, ri) => `<tr>
+            <td class="cf"><input data-cr="${gi}:${ri}" value="${esc(r.name)}" aria-label="Feature"></td>
+            ${eds.map((_, vi) => { const v = (r.values || [])[vi] ?? ''; return `<td><input class="cv ${cellClass(v)}" data-cv="${gi}:${ri}:${vi}" value="${esc(v)}" list="cvList" aria-label="${esc(eds[vi])}"></td>`; }).join('')}
+            <td class="cd"><button type="button" class="icon-act danger" data-cr-del="${gi}:${ri}" title="Delete feature" aria-label="Delete feature">${icon('trash')}</button></td>
+          </tr>`).join('')}
+          <tr class="cadd"><td colspan="${eds.length + 2}"><button type="button" class="btn link sm" data-cr-add="${gi}">+ Add feature to “${esc(g.name)}”</button></td></tr>
+        </tbody>`).join('')}
+      </table>
+    </div>
+    <datalist id="cvList"><option value="√"><option value="X"><option value="+"><option value="YES"><option value="NO"><option value="MULTI"></datalist>
+    <div class="sect-foot" style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn sm" id="cgAdd">+ Add group</button>
+      <button type="button" class="btn link sm" id="cmpReset">Restore original versions &amp; list</button>
+    </div>`;
+}
+
+function refreshCmpEditor() {
+  const box = $('#cmpEditor');
+  if (box) box.innerHTML = cmpEditorHTML();
+}
+
+/** Settings > Versions & comparison: edits. Returns true when the event was handled. */
+function cmpInput(el) {
+  const S_ = S;
+  if (el.dataset.ed !== undefined) {
+    const i = +el.dataset.ed, old = S_.editions[i], nu = el.value;
+    S_.editions[i] = nu;
+    // keep documents' column choices pointing at the renamed version
+    if (doc.edition === old) doc.edition = nu;
+    $$('.cmp-edit thead th')[i + 1].textContent = nu;
+    return true;
+  }
+  if (el.dataset.cg !== undefined) { S_.comparison[+el.dataset.cg].name = el.value; return true; }
+  if (el.dataset.cgNum !== undefined) { S_.comparison[+el.dataset.cgNum].numbered = el.checked; return true; }
+  if (el.dataset.cr !== undefined) { const [g, r] = el.dataset.cr.split(':').map(Number); S_.comparison[g].rows[r].name = el.value; return true; }
+  if (el.dataset.cv !== undefined) {
+    const [g, r, v] = el.dataset.cv.split(':').map(Number);
+    const val = normCell(el.value);
+    if (val !== el.value && /^[vVxXyY✓✗]$/.test(el.value.trim())) el.value = val;
+    const row = S_.comparison[g].rows[r];
+    while (row.values.length < S_.editions.length) row.values.push('');
+    row.values[v] = val;
+    el.className = 'cv ' + cellClass(val);
+    return true;
+  }
+  return false;
+}
+
+async function cmpClick(b) {
+  const eds = S.editions, groups = S.comparison;
+  if (b.id === 'edAdd') { eds.push('New version'); groups.forEach(g => g.rows.forEach(r => r.values.push(''))); }
+  else if (b.dataset.edDel !== undefined) {
+    const i = +b.dataset.edDel;
+    if (!(await ask({ title: `Remove “${eds[i]}”?`, message: 'The version and its column in the comparison list are removed for this team.', ok: 'Remove', danger: true }))) return true;
+    eds.splice(i, 1); groups.forEach(g => g.rows.forEach(r => r.values.splice(i, 1)));
+  }
+  else if (b.dataset.crAdd !== undefined) groups[+b.dataset.crAdd].rows.push({ id: uid(), name: '', values: eds.map(() => '') });
+  else if (b.dataset.crDel !== undefined) { const [g, r] = b.dataset.crDel.split(':').map(Number); groups[g].rows.splice(r, 1); }
+  else if (b.id === 'cgAdd') groups.push({ id: uid(), name: 'New group', numbered: true, rows: [{ id: uid(), name: '', values: eds.map(() => '') }] });
+  else if (b.dataset.cgDel !== undefined) {
+    const g = groups[+b.dataset.cgDel];
+    if (!(await ask({ title: `Delete group “${g.name}”?`, message: `Its ${g.rows.length} feature(s) are removed from the comparison list for this team.`, ok: 'Delete', danger: true }))) return true;
+    groups.splice(+b.dataset.cgDel, 1);
+  }
+  else if (b.id === 'cmpReset') {
+    if (!(await ask({ title: 'Restore the original list?', message: 'Versions and the comparison list go back to the original (from your features PDF). Your changes to them are lost.', ok: 'Restore', danger: true }))) return true;
+    S.editions = clone(DEFAULT_EDITIONS); S.comparison = clone(DEFAULT_COMPARISON);
+  }
+  else return false;
+  refreshCmpEditor();
+  if (b.dataset.crAdd !== undefined) { const ins = $$(`[data-cr^="${b.dataset.crAdd}:"]`); if (ins.length) ins[ins.length - 1].focus(); }
+  settingsChanged();
+  return true;
 }
 
 function refreshSecondNumber() {
@@ -1136,6 +1313,10 @@ function settingsHTML() {
           ${field('QR code opens', `<select data-s="qrTarget">${opt('whatsapp', 'WhatsApp chat with us', S.qrTarget)}${opt('website', 'Our website', S.qrTarget)}${opt('none', 'No QR code', S.qrTarget)}</select>`)}
         </div>
         <div class="qr-preview" id="qrPreview"></div>
+      `)}
+
+      ${sect('versions', 'Versions &amp; comparison', 'The versions are printed on every document with the chosen one ticked. The comparison list can be attached to any quotation or invoice.', `
+        <div id="cmpEditor"></div>
       `)}
 
       ${sect('defaults', 'Document defaults', 'Pre-filled on every new document. You can still change them per document.', `
@@ -1248,6 +1429,7 @@ function loadSettingsForm() {
   });
   updateCounts(p);
   refreshQrPreview();
+  refreshCmpEditor();
   p.scrollTop = scroll;
 
   // highlight the section in view
@@ -1277,6 +1459,7 @@ function bindSettings() {
   const p = $('#settingsPanel');
   p.addEventListener('input', e => {
     const el = e.target;
+    if (cmpInput(el)) { settingsChanged(); return; }
     if (el.dataset.preset !== undefined) {
       const it = S.presets[+el.dataset.preset];
       it[el.dataset.k] = el.dataset.k === 'desc' ? el.value : (parseFloat(el.value) || 0);
@@ -1322,6 +1505,8 @@ function bindSettings() {
     } catch (err) { toast('Could not read that image', true); }
   });
   p.addEventListener('click', async e => {
+    const cb = e.target.closest('#cmpEditor button');
+    if (cb && await cmpClick(cb)) return;
     const nav = e.target.closest('.settings-nav a');
     if (nav) {
       e.preventDefault();

@@ -58,6 +58,58 @@ const HARDWARE_CONFIG_DETAILED = [
   'Power & Backup: UPS recommended, with a regular data backup.'
 ];
 
+/* ---------- software versions and the feature comparison list ----------
+   Codes: v = √ included, x = X not included, + = add-on (chargeable). Order: Lite Basic Standard Ultra Pro Advance Enterprise.
+   The 8th version (Web Based) starts empty – fill it in Settings > Versions & comparison. */
+const DEFAULT_EDITIONS = ['Lite', 'Basic', 'Standard', 'Ultra', 'Pro', 'Advance', 'Enterprise', 'Web Based'];
+const DEFAULT_COMPARISON = (() => {
+  const mark = code => [...code].map(c => (c === 'v' ? '√' : c === 'x' ? 'X' : '+')).concat(['']);
+  const groups = [
+    ['Overview', false, [
+      ['Computer / LAN (Users)', ['1', '1', '1', '1', '1', '2', '4', '']],
+      ['Company Management', ['1', '2', 'MULTI', 'MULTI', 'MULTI', 'MULTI', 'MULTI', '']],
+      ['Mobile App (Android)', ['NO', 'YES', 'YES', 'YES', 'YES', 'YES', 'YES', '']],
+      ['Mobile App (Apple iOS)', ['NO', 'NO', 'NO', 'YES', 'YES', 'YES', 'YES', '']]]],
+    ['Transactions', true, [
+      ['Barcode / QR Code', 'vvvvvvv'], ['Sales / Estimate / Sales Return', 'vvvvvvv'], ['RFID Integration', 'xxxxxx+'],
+      ['Purchase / Debit Note', 'vvvvvvv'], ['Approval Issue / Receive', 'vvvvvvv'], ['Wholesale / Ratecut', 'vvvvvvv'],
+      ['Tag Generate / Edit / Cancel', 'vvvvvvv'], ['Tag Weight Change', 'xvvvvvv'], ['Tag Split', 'xxxxxvv'],
+      ['Sale Quotation / Purchase Quotation', 'xvvvvvv'], ['Counter wise stock management', 'xvvvvvv'], ['E-Invoice / E-Credit Note', 'x++++++'],
+      ['Labour Invoice', 'xvvvvvv'], ['Old Item Refinery Process', 'xxvvvvv'], ['Bill wise payment receive', 'xxvvvvv'],
+      ['Other Income / Expense', 'xvvvvvv'], ['Lot / Batch wise purchase management', 'xxxxxxv']]],
+    ['Order / Repairing', true, [
+      ['Sales order / Order cancel', 'vvvvvvv'], ['Order tracking report', 'xxxxxxv'], ['Repairing Issue / Received', 'xxvvvvv']]],
+    ['User Security System', true, [
+      ['User create', 'vvvvvvv'], ['User rights', 'xvvvvvv'], ['User request (Edit / Delete)', 'xxxxxxv'],
+      ['Data backup', 'vvvvvvv'], ['Day wise data lock', 'xxvvvvv']]],
+    ['Analysis Reports', true, [
+      ['Dead stock', 'xxvvvvv'], ['Sales Zoom (Month / City / Party / Item wise)', 'xxvvvvv'], ['Purchase Zoom (Month / City / Party / Item wise)', 'xxvvvvv'],
+      ["Customer's last visit report", 'xxxxvvv'], ['Stock movement (with weight range)', 'xxxxvvv'], ['Delete data report', 'xxxxvvv'],
+      ['Minimum stock level report', 'xxxxxxv'], ["Graph reports (Sales / Expense / Employee's sale)", 'xxxxxxv'], ['Bill wise profit / Item wise profit', 'xxxxxxv'],
+      ["User's activity report", 'xxxxxxv'], ["Supplier's stock movement report", 'xxxxxxv'], ["User's entry modification report", 'xxxxxxv'],
+      ["Employee's incentive & target", 'xxxxxxv'], ['Employee wise sales analysis report', 'xxxxxxv']]],
+    ['Financial', true, [
+      ['Cash / Bank Contra Entry', 'vvvvvvv'], ['Ledger with metal and cash', 'vvvvvvv'], ['Final Reports (Balance Sheet / Profit & Loss)', 'xxvvvvv'],
+      ['GST Reports', 'vvvvvvv'], ['Audit Interest Report / Depreciation Report', 'xxxxxvv'], ['TDS / TCS Reports', 'xxvvvvv'], ['Total Fine Report', 'xxvvvvv']]],
+    ['Reports', true, [
+      ['Sale / Purchase / Order / Approval', 'vvvvvvv'], ['Tag stock report / HUID report', 'vvvvvvv'], ['Cash book / Bank book', 'vvvvvvv'],
+      ['Day book / Rojmel', 'xvvvvvv'], ['Outstanding Report', 'xvvvvvv'], ['Address print report / Parcel Receipt Print', 'xvvvvvv']]],
+    ['Others', true, [
+      ['Saving scheme / Chit fund Management', 'xxxvvvv'], ['Girvi / Money Lending / Loan (Amount / Metal)', 'xxxxvvv'], ['WhatsApp Module', 'x++++++'],
+      ['Weight scale connectivity', 'xx+++++'], ['Customer Loyalty Program', 'xxxxxxv'], ["Employee's Salary Calculation", 'xxxxxvv'], ['CRM Module', 'xxxxxx+']]],
+    ['Branch Management (Add-on feature)', true, [
+      ['Cash inward / outward', 'xxxxxxv'], ['Stock inward / outward', 'xxxxxxv'], ['Store (Branch) wise report', 'xxxxxxv']]],
+    ['Mobile App Features', true, [
+      ['Sales / Order / Stock / Ledger Reports', 'xvvvvvv'], ['Sales Quotation', 'xvvvvvv'], ['Image wise item catalogue', 'xxvvvvv'], ['Scheme / Money Lending Report', 'xxxxvvv']]],
+    ['Image Catalogue Android App (Add-on feature)', true, [
+      ['Admin / Client module app', '+++++++'], ['Available stock & order design display', '+++++++']]]
+  ];
+  return groups.map(([name, numbered, rows], gi) => ({
+    id: 'g' + (gi + 1), name, numbered,
+    rows: rows.map(([rname, v], ri) => ({ id: `g${gi + 1}r${ri + 1}`, name: rname, values: Array.isArray(v) ? v : mark(v) }))
+  }));
+})();
+
 const DEFAULT_SETTINGS = {
   companyName: 'Data Care Softech',
   legalName: 'DataCare Softech FZCO',
@@ -85,6 +137,8 @@ const DEFAULT_SETTINGS = {
   hardware: HARDWARE_CONFIG,                    // quotations (short, keeps them on one page)
   hardwareInvoice: HARDWARE_CONFIG_DETAILED,    // invoices (detailed)
   softwareVersions: ['DataCare Next'],
+  editions: DEFAULT_EDITIONS,          // printed on every document, the chosen one ticked
+  comparison: DEFAULT_COMPARISON,      // feature comparison list (attachable to a document)
   presets: [
     { desc: 'DataCare Next Software Price (1 Month WhatsApp Free):', AED: 7000, INR: 0 },
     { desc: 'Hardware Price (Printer + Scanner + label + Golden Ribbon):', AED: 1700, INR: 0 },

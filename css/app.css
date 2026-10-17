@@ -666,3 +666,42 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .qr-preview b { display: block; font-size: 14px; }
 .qr-preview small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
 .qr-preview a { color: var(--blue); }
+
+/* editor: comparison options */
+.comp-opts { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fafbfc; }
+.comp-cols { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.chip-chk { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 4px 10px 4px 7px; font-size: 12.5px; cursor: pointer; }
+.chip-chk input { margin: 0; accent-color: var(--brand); }
+.chip-chk.chosen { border-color: var(--brand); background: #fff1e6; font-weight: 600; }
+.comp-quick { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.comp-rows summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 6px 0; }
+.comp-count { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.comp-g { margin: 8px 0 4px; }
+.comp-g .chk { margin: 2px 0; }
+.comp-g .chk.r { margin-left: 22px; font-size: 12.5px; }
+.comp-g .chk input { accent-color: var(--brand); }
+
+/* settings: versions + comparison editor */
+.ver-names { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.ver-pill { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: #fff; overflow: hidden; }
+.sect-body .ver-pill input { border: 0 !important; width: 104px; padding: 7px 8px !important; font-weight: 600; }
+.ver-pill button { border: 0; border-left: 1px solid var(--border); background: #fafbfc; color: #9aa2b1; cursor: pointer; width: 30px; align-self: stretch; font-size: 16px; }
+.ver-pill button:hover { color: var(--danger); background: #fff6f6; }
+.cmp-wrap { margin-top: 8px; border: 1px solid var(--border); border-radius: 10px; max-height: 620px; overflow: auto; }
+.cmp-edit { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cmp-edit thead th { position: sticky; top: 0; z-index: 1; background: #1B2A4A; color: #fff; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; padding: 7px 4px; font-weight: 600; min-width: 64px; }
+.cmp-edit th.cf { text-align: left; padding-left: 10px; min-width: 240px; }
+.cmp-edit td { padding: 2px 3px; border-top: 1px solid #eef0f4; }
+.cmp-edit td.cf { padding-left: 6px; }
+.sect-body .cmp-edit td input { padding: 5px 7px !important; font-size: 12.5px; border-radius: 6px; }
+.sect-body .cmp-edit input.cv { text-align: center; font-weight: 700; padding: 5px 2px !important; }
+.sect-body .cmp-edit input.cv.ok { color: #1f7a42; background: #f1faf5; }
+.sect-body .cmp-edit input.cv.no { color: #c73b3b; background: #fff6f6; }
+.sect-body .cmp-edit input.cv.add { color: #4a5366; background: #eef0f4; }
+.cmp-edit tr.cg td { background: #fff6ee; padding: 7px 8px; border-top: 1px solid #f3dcc7; }
+.cmp-edit tr.cg td > * { vertical-align: middle; }
+.sect-body .cmp-edit input.cg-name { width: 300px; max-width: 60%; font-weight: 700; margin-right: 10px; }
+.cmp-edit tr.cg .chk { display: inline-flex; margin: 0 10px 0 0; }
+.cmp-edit tr.cadd td { padding: 2px 6px 8px; }
+.cmp-edit td.cd { width: 40px; text-align: center; }
+.cmp-edit .icon-act { width: 28px; height: 28px; }
