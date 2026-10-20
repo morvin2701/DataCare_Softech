@@ -743,3 +743,12 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
   #view-editor .dirty { white-space: nowrap; flex: none; }
   #view-editor .pt-right { flex: none; }
 }
+
+/* document type: one full-width row, three equal buttons on one line */
+.seg3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg3 button { white-space: nowrap; padding: 8px 6px; font-size: 13.5px; }
+.seg3 button + button { border-left: 1px solid var(--border); }
+.branch-line { display: flex; align-items: center; gap: 12px; }
+.branch-line .hint { margin: 0; }
+.branch-line .branch-fixed { height: auto; }
+.branch-line .seg { width: auto; flex: 1; max-width: 260px; }

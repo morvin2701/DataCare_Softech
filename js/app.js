@@ -201,10 +201,12 @@ function formHTML(d) {
     <button type="button" class="btn primary sm" data-make="${next[0]}">${next[2]} →</button>
   </div>` : ''}
   <fieldset class="fs"><legend>Document</legend>
-    <div class="row">
+    <div class="row one">
       <div><div class="hint">Type</div><div class="seg seg3" data-seg="type">
         <button type="button" data-v="quotation">Quotation</button><button type="button" data-v="order">Order Form</button><button type="button" data-v="invoice">Invoice</button></div></div>
-      <div><div class="hint">Issuing branch</div>${REGION
+    </div>
+    <div class="row one">
+      <div class="branch-line"><div class="hint">Issuing branch</div>${REGION
         ? `<div class="branch-fixed"><span class="chip">${regionName(d.branch)}</span>${d.branch !== REGION ? '<small class="muted">other team</small>' : ''}</div>`
         : `<div class="seg" data-seg="branch"><button type="button" data-v="UAE">UAE</button><button type="button" data-v="IN">India</button></div>`}</div>
     </div>
