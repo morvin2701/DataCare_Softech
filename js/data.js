@@ -39,6 +39,9 @@ const INVOICE_TERMS = [
   'Terms & conditions apply.'
 ];
 
+// Order form terms start as a copy of the invoice terms (edit them in Settings > Default text).
+const ORDER_TERMS = INVOICE_TERMS;
+
 const HARDWARE_CONFIG = [
   'Minimum Intel i5 or i7 Processor required.',
   'Operating System Windows 10 Pro or 11 Pro.',
@@ -129,11 +132,13 @@ const DEFAULT_SETTINGS = {
   preparedBy: 'Shreyash Thumar',
   headerContact2: { phone: '' },   // second number on the header; '' = the other branch's office number
   amcPercent: 10,
-  numbering: { quotation: 'DC-{BR}-QT-{YYYY}-{SEQ}', invoice: 'DC-{BR}-INV-{YYYY}-{SEQ}', pad: 4 },
-  counters: { 'quotation-UAE': 1, 'quotation-IN': 1, 'invoice-UAE': 1, 'invoice-IN': 1 },
+  amcMode: 'percent',   // 'percent' = % of the software price, 'amount' = fixed amount per year
+  amcAmount: 0,
+  numbering: { quotation: 'DC-{BR}-QT-{YYYY}-{SEQ}', order: 'DC-{BR}-OF-{YYYY}-{SEQ}', invoice: 'DC-{BR}-INV-{YYYY}-{SEQ}', pad: 4 },
+  counters: { 'quotation-UAE': 1, 'quotation-IN': 1, 'order-UAE': 1, 'order-IN': 1, 'invoice-UAE': 1, 'invoice-IN': 1 },
   logo: null,
   stamp: null,
-  terms: { quotation: QUOTATION_TERMS, invoice: INVOICE_TERMS },
+  terms: { quotation: QUOTATION_TERMS, order: ORDER_TERMS, invoice: INVOICE_TERMS },
   hardware: HARDWARE_CONFIG,                    // quotations (short, keeps them on one page)
   hardwareInvoice: HARDWARE_CONFIG_DETAILED,    // invoices (detailed)
   softwareVersions: ['DataCare Next'],
@@ -151,9 +156,24 @@ const DEFAULT_SETTINGS = {
   ]
 };
 
+/* The three kinds of document. Order forms sit between a quotation and the invoice. */
+const DOC_KINDS = {
+  quotation: { title: 'Quotation', short: 'Quot', lower: 'quotation', plural: 'Quotations' },
+  order: { title: 'Order Form', short: 'Order', lower: 'order form', plural: 'Order Forms' },
+  invoice: { title: 'Invoice', short: 'Inv', lower: 'invoice', plural: 'Invoices' }
+};
+const kindOf = t => DOC_KINDS[t] || DOC_KINDS.quotation;
+
+/** Default on/off switches for each kind of document. */
+function typeDefaults(t) {
+  const q = t === 'quotation';
+  return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice' };
+}
+
 const BRANCH_NAMES = { UAE: 'UAE (Dubai)', IN: 'India' };
 const STATUSES = {
   quotation: ['Draft', 'Sent', 'Accepted', 'Rejected'],
+  order: ['Confirmed', 'In Progress', 'Installed', 'Cancelled'],
   invoice: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled']
 };
 const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'Cheque', 'Card', 'Online / UPI'];

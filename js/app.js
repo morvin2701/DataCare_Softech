@@ -116,7 +116,7 @@ function nextNumber(type, branch, date) {
   return { number, seq };
 }
 /** Quotations use the short hardware list (one page); invoices use the detailed one. */
-const defaultHardware = type => [...((type === 'invoice' ? S.hardwareInvoice : S.hardware) || [])];
+const defaultHardware = type => [...((type === 'quotation' ? S.hardware : S.hardwareInvoice) || [])];   // order forms + invoices: detailed
 
 function refreshAutoNumber() {
   if (doc.autoNumber && !doc.numberAssigned) doc.number = nextNumber(doc.type, doc.branch, doc.date).number;
@@ -131,16 +131,16 @@ function newDoc(type, branch) {
     date: todayISO(), currency: b.currency, status: STATUSES[type][0],
     customer: { company: '', contact: '', address: '', city: '', country: branch === 'IN' ? 'India' : 'UAE', mobile: '', email: '', taxId: '' },
     customerType: 'new',
-    showVersion: type === 'invoice', softwareVersion: S.softwareVersions[0] || 'DataCare Next',
+    softwareVersion: S.softwareVersions[0] || 'DataCare Next',
     edition: '', showEditions: true, showComparison: false, compHideCols: [], compHideRows: [],
     items: [{ desc: '', amount: 0 }],
     discount: 0, taxEnabled: false, taxLabel: b.taxLabel, taxRate: b.taxRate, advance: 0,
-    showWords: type === 'invoice', notes: '',
-    showHardware: true, hardware: defaultHardware(type),
-    terms: [...S.terms[type]], amcPercent: S.amcPercent, termsNewPage: type === 'invoice',
+    notes: '', hardware: defaultHardware(type),
+    terms: [...(S.terms[type] || S.terms.invoice)], amcPercent: S.amcPercent, amcMode: S.amcMode || 'percent', amcAmount: S.amcAmount || 0,
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
-    showAcceptance: type === 'invoice', showStamp: false,
-    showSupport: type === 'invoice', payment: { date: '', mode: '', ref: '' }
+    showStamp: false, payment: { date: '', mode: '', ref: '' },
+    installDate: '', paymentTerms: '',
+    ...typeDefaults(type)
   };
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
   return d;
@@ -151,6 +151,10 @@ function normalizeDoc(d) {
   if (d.showSupport === undefined) d.showSupport = d.type === 'invoice';
   if (!d.payment || typeof d.payment !== 'object') d.payment = { date: '', mode: '', ref: '' };
   if (d.showEditions === undefined) d.showEditions = true;
+  if (!d.amcMode) d.amcMode = 'percent';
+  if (d.amcAmount === undefined) d.amcAmount = 0;
+  if (d.installDate === undefined) d.installDate = '';
+  if (d.paymentTerms === undefined) d.paymentTerms = '';
   if (d.edition === undefined) d.edition = '';
   if (!Array.isArray(d.compHideCols)) d.compHideCols = [];
   if (!Array.isArray(d.compHideRows)) d.compHideRows = [];
@@ -190,17 +194,22 @@ const opt = (v, label, sel) => `<option value="${esc(v)}"${String(v) === String(
 
 function formHTML(d) {
   const isInv = d.type === 'invoice';
+  const next = { quotation: ['order', 'Customer confirmed the quotation?', 'Make Order Form'], order: ['invoice', 'Ready to bill this order?', 'Make Invoice'] }[d.type];
   return `
+  ${next && !readOnly ? `<div class="next-step">
+    <span>${next[1]}</span>
+    <button type="button" class="btn primary sm" data-make="${next[0]}">${next[2]} →</button>
+  </div>` : ''}
   <fieldset class="fs"><legend>Document</legend>
     <div class="row">
-      <div><div class="hint">Type</div><div class="seg" data-seg="type">
-        <button type="button" data-v="quotation">Quotation</button><button type="button" data-v="invoice">Invoice</button></div></div>
+      <div><div class="hint">Type</div><div class="seg seg3" data-seg="type">
+        <button type="button" data-v="quotation">Quotation</button><button type="button" data-v="order">Order Form</button><button type="button" data-v="invoice">Invoice</button></div></div>
       <div><div class="hint">Issuing branch</div>${REGION
         ? `<div class="branch-fixed"><span class="chip">${regionName(d.branch)}</span>${d.branch !== REGION ? '<small class="muted">other team</small>' : ''}</div>`
         : `<div class="seg" data-seg="branch"><button type="button" data-v="UAE">UAE</button><button type="button" data-v="IN">India</button></div>`}</div>
     </div>
     <div class="row">
-      <label class="f">${isInv ? 'Invoice' : 'Quotation'} No.<input data-f="number" placeholder="Auto"></label>
+      <label class="f">${kindOf(d.type).title} No.<input data-f="number" placeholder="Auto"></label>
       <label class="f">Date<input type="date" data-f="date"></label>
     </div>
     <div class="hint" id="numHint"></div>
@@ -254,6 +263,10 @@ function formHTML(d) {
       <label class="f">Discount (amount)<input type="number" step="any" min="0" data-f="discount"></label>
       <label class="f">Advance received<input type="number" step="any" min="0" data-f="advance"></label>
     </div>
+    <div class="row" id="orderRow">
+      <label class="f">Expected installation date<input type="date" data-f="installDate"></label>
+      <label class="f">Payment terms<input data-f="paymentTerms" placeholder="e.g. 50% advance, balance on installation"></label>
+    </div>
     <label class="chk"><input type="checkbox" data-f="taxEnabled"> Add tax</label>
     <div class="row" id="taxRow">
       <label class="f">Tax label<input data-f="taxLabel"></label>
@@ -274,17 +287,19 @@ function formHTML(d) {
 
   <fieldset class="fs"><legend>Hardware Configuration</legend>
     <label class="chk"><input type="checkbox" data-f="showHardware"> Show hardware configuration</label>
-    <label class="f">One point per line. Write <code>Title: text</code> to print the title in bold.<textarea data-f="hardware" data-list rows="${isInv ? 8 : 4}"></textarea></label>
-    <button type="button" class="btn link" id="resetHw">Reset to default ${isInv ? 'invoice (detailed)' : 'quotation (short)'} list</button>
+    <label class="f">One point per line. Write <code>Title: text</code> to print the title in bold.<textarea data-f="hardware" data-list rows="${d.type === 'quotation' ? 4 : 8}"></textarea></label>
+    <button type="button" class="btn link" id="resetHw">Reset to default ${d.type === 'quotation' ? 'quotation (short)' : 'detailed'} list</button>
   </fieldset>
 
   <fieldset class="fs"><legend>Terms &amp; Conditions</legend>
     <div class="row">
-      <label class="f">AMC %<input type="number" step="any" min="0" data-f="amcPercent"></label>
-      <div style="display:flex;align-items:flex-end"><label class="chk"><input type="checkbox" data-f="termsNewPage"> Start on new page</label></div>
+      <label class="f">AMC<select data-f="amcMode">${opt('percent', '% of software price', d.amcMode)}${opt('amount', 'Fixed amount per year', d.amcMode)}</select></label>
+      <label class="f" id="amcPctF">AMC %<input type="number" step="any" min="0" data-f="amcPercent"></label>
+      <label class="f" id="amcAmtF">AMC amount (${esc(d.currency)})<input type="number" step="any" min="0" data-f="amcAmount"></label>
     </div>
-    <label class="f">One term per line — <code>{AMC}</code> is replaced with the AMC %<textarea data-f="terms" data-list rows="10"></textarea></label>
-    <button type="button" class="btn link" id="resetTerms">Reset to default ${isInv ? 'invoice' : 'quotation'} terms</button>
+    <label class="chk"><input type="checkbox" data-f="termsNewPage"> Start terms on a new page</label>
+    <label class="f">One term per line — <code>{AMC}</code> is replaced with the AMC (<span id="amcNow"></span>)<textarea data-f="terms" data-list rows="10"></textarea></label>
+    <button type="button" class="btn link" id="resetTerms">Reset to default ${kindOf(d.type).lower} terms</button>
   </fieldset>
 
   <fieldset class="fs"><legend>Signature</legend>
@@ -339,9 +354,13 @@ function syncForm() {
   $('#cityLbl').textContent = uae ? 'Emirate' : 'City';
   $('#taxRow').style.display = doc.taxEnabled ? '' : 'none';
   $('#compOpts').style.display = doc.showComparison ? '' : 'none';
-  const payOn = doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid');
+  $('#orderRow').style.display = doc.type === 'order' ? '' : 'none';
+  $('#amcPctF').style.display = doc.amcMode === 'amount' ? 'none' : '';
+  $('#amcAmtF').style.display = doc.amcMode === 'amount' ? '' : 'none';
+  $('#amcNow').textContent = amcLabel(doc);
+  const payOn = (doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid')) || (doc.type === 'order' && Number(doc.advance) > 0);
   $('#payBox').style.display = payOn ? '' : 'none';
-  $('#payTitle').textContent = doc.status === 'Partially Paid' ? 'Advance received – printed on the invoice (enter the amount in “Advance received” above)' : 'Payment received – printed on the invoice';
+  $('#payTitle').textContent = doc.status === 'Partially Paid' || doc.type === 'order' ? 'Advance received – printed on the invoice (enter the amount in “Advance received” above)' : 'Payment received – printed on the invoice';
   $('#numHint').textContent = doc.autoNumber && !doc.numberAssigned
     ? 'Number is assigned automatically when you save. Type your own to override.'
     : (doc.autoNumber ? '' : 'Custom number. Clear the field to go back to automatic numbering.');
@@ -360,10 +379,10 @@ function compOptsHTML(d) {
   return `
     <div class="comp-custom${src.custom ? ' on' : ''}">
       ${src.custom
-        ? `<span class="badge-custom">✎ Custom list for this ${d.type === 'invoice' ? 'invoice' : 'quotation'}</span>
+        ? `<span class="badge-custom">✎ Custom list for this ${kindOf(d.type).lower}</span>
            <button type="button" class="btn sm" data-comp-edit>Edit list</button>
            <button type="button" class="btn link sm" data-comp-reset>Reset to default</button>`
-        : `<button type="button" class="btn sm" data-comp-edit>✎ Edit list for this ${d.type === 'invoice' ? 'invoice' : 'quotation'}</button>
+        : `<button type="button" class="btn sm" data-comp-edit>✎ Edit list for this ${kindOf(d.type).lower}</button>
            <span class="hint">Change values, rename or add features – only for this document.</span>`}
     </div>
     <div class="hint">Versions (columns) to compare – the chosen version is highlighted</div>
@@ -418,8 +437,9 @@ function updateSum() {
   if (doc.taxEnabled) h += line(`${esc(doc.taxLabel)} ${doc.taxRate}%`, t.tax);
   if (isPaidInvoice(doc)) h += line('Total paid', t.total, 't') + line('Balance due', 0);
   else {
-    h += line('Total payable', t.total, 't');
-    if (t.adv) h += line('Advance', t.adv) + line('Balance due', t.balance, 't');
+    const ord = doc.type === 'order';
+    h += line(ord ? 'Total order value' : 'Total payable', t.total, 't');
+    if (t.adv) h += line('Advance', t.adv) + line(ord ? 'Balance payable' : 'Balance due', t.balance, 't');
   }
   $('#sumBox').innerHTML = h;
 }
@@ -451,6 +471,8 @@ function onField(f, el) {
     refreshAutoNumber();
   } else if (f === 'edition' || f === 'showComparison') {
     refreshCompOpts();
+  } else if (f === 'advance' && doc.type === 'order' && Number(doc.advance) > 0 && !doc.payment.date) {
+    doc.payment.date = todayISO();
   } else if (f === 'status') {
     // marking an invoice paid: assume it was paid today unless a date is already entered
     if (doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid') && !doc.payment.date) doc.payment.date = todayISO();
@@ -468,13 +490,10 @@ function onField(f, el) {
 function setType(t) {
   if (doc.type === t) return;
   const old = doc.type;
-  if (JSON.stringify(doc.terms) === JSON.stringify(S.terms[old])) doc.terms = [...S.terms[t]];
+  if (JSON.stringify(doc.terms) === JSON.stringify(S.terms[old] || [])) doc.terms = [...(S.terms[t] || S.terms.invoice)];
   if (JSON.stringify(doc.hardware) === JSON.stringify(defaultHardware(old))) doc.hardware = defaultHardware(t);
-  Object.assign(doc, {
-    type: t,
-    showHardware: true, showVersion: t === 'invoice',
-    showAcceptance: t === 'invoice', termsNewPage: t === 'invoice', showSupport: t === 'invoice'
-  });
+  const { showWords, ...flags } = typeDefaults(t);   // amount in words is left as the user set it
+  Object.assign(doc, { type: t, ...flags });
   if (!STATUSES[t].includes(doc.status)) doc.status = STATUSES[t][0];
   if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
 }
@@ -532,6 +551,7 @@ function bindForm() {
   form.addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.make) { makeNext(b.dataset.make); return; }
     if (b.dataset.compEdit !== undefined) { startDocCompEdit(); return; }
     if (b.dataset.compReset !== undefined) { resetDocComp(); return; }
     if (b.dataset.compCols || b.dataset.compRows) {
@@ -570,6 +590,16 @@ function bindForm() {
 }
 
 /* ---------------- saving ---------------- */
+/** Turns the open quotation into an order form, or an order form into an invoice (saving it first). */
+async function makeNext(type) {
+  if (readOnly) return;
+  if ((dirty || !isSaved(doc)) && !saveDoc(true)) return;
+  const src = doc;
+  openDoc(copyAsNew(src, type), true);
+  window.scrollTo(0, 0);
+  toast(`${kindOf(type).title} created from ${kindOf(src.type).lower} ${src.number} – review and Save`);
+}
+
 function saveDoc(silent = false) {
   if (readOnly) { toast(`This document belongs to the ${regionName(doc.branch)} team and can only be viewed.`, true); return false; }
   if (doc.autoNumber && !doc.numberAssigned) {
@@ -587,6 +617,14 @@ function saveDoc(silent = false) {
   doc.total = docTotals(doc).total;
   const i = docs.findIndex(x => x.id === doc.id);
   if (i >= 0) docs[i] = clone(doc); else docs.unshift(clone(doc));
+  // first save of an order form made from a quotation: the quotation is now accepted
+  if (i < 0 && doc.fromQuotationId) {
+    const q = docs.find(x => x.id === doc.fromQuotationId);
+    if (q && q.type === 'quotation' && ['Draft', 'Sent'].includes(q.status) && canEdit(q)) {
+      q.status = 'Accepted'; q.updatedAt = now;
+      remotePutDoc(q);
+    }
+  }
   const stored = Store.set('dc_docs', docs);
   if (!stored && !API.online) { toast('Saving failed – browser storage is full or blocked.', true); return false; }
   remotePutDoc(doc);
@@ -596,7 +634,7 @@ function saveDoc(silent = false) {
   syncForm();
   refreshCustomerList();
   renderPreview();
-  if (!silent) toast(`Saved ${doc.type === 'invoice' ? 'invoice' : 'quotation'} ${doc.number}`);
+  if (!silent) toast(`Saved ${kindOf(doc.type).lower} ${doc.number}`);
   return true;
 }
 
@@ -612,7 +650,7 @@ function renderPreview() {
   while (area.firstChild) prev.appendChild(area.firstChild);
   applyZoom();
   const b = BRANCH_NAMES[doc.branch];
-  $('#docLabel').textContent = `${doc.type === 'invoice' ? 'Invoice' : 'Quotation'} ${doc.number || ''} · ${b}${isSaved(doc) ? '' : ' · new'}`;
+  $('#docLabel').textContent = `${kindOf(doc.type).title} ${doc.number || ''} · ${b}${isSaved(doc) ? '' : ' · new'}`;
   $('#dirtyFlag').hidden = !dirty;
 }
 
@@ -630,7 +668,7 @@ function applyZoom() {
 function fileBase(d) {
   const clean = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
   const parts = [clean(d.customer.company).toUpperCase(), clean(d.customer.city).toUpperCase()].filter(Boolean);
-  const kind = d.type === 'invoice' ? 'Invoice' : 'Quotation';
+  const kind = kindOf(d.type).title;
   return `${parts.join(' - ') || kind}${parts.length ? ` - ${kind}` : ''} ${clean(d.number)}`.trim();
 }
 
@@ -708,6 +746,7 @@ async function printDoc() {
 /* ---------------- saved documents ---------------- */
 const ICONS = {
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14 6l4 4"/>',
+  order: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.5h6V4"/><path d="M8.5 12l2.5 2.5L15.5 10"/>',
   pdf: '<path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
   convert: '<path d="M5 12h13"/><path d="M13 6l6 6-6 6"/>',
@@ -755,7 +794,7 @@ function filteredDocs() {
   }[docsView.sort];
   return docs
     .filter(d => inRegion(d) && (!docsView.tab || d.type === docsView.tab) && (!fs || d.status === fs))
-    .filter(d => !q || [d.number, d.customer.company, d.customer.contact, d.customer.city, d.customer.mobile, d.fromQuotation]
+    .filter(d => !q || [d.number, d.customer.company, d.customer.contact, d.customer.city, d.customer.mobile, d.fromQuotation, d.fromOrder]
       .some(v => String(v || '').toLowerCase().includes(q)))
     .sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * docsView.dir; });
 }
@@ -772,6 +811,7 @@ function renderRegionTabs() {
 function renderStats() {
   const scoped = docs.filter(inRegion);
   const quotes = scoped.filter(d => d.type === 'quotation');
+  const orders = scoped.filter(d => d.type === 'order');
   const invs = scoped.filter(d => d.type === 'invoice' && d.status !== 'Cancelled');
   const open = invs.filter(d => d.status !== 'Paid');
   const paid = invs.filter(d => d.status === 'Paid');
@@ -781,6 +821,11 @@ function renderStats() {
       <div class="stat-ic blue">${icon('doc')}</div>
       <div><div class="stat-l">Quotations</div><div class="stat-v">${quotes.length}</div>
       <div class="stat-s">${accepted} accepted · ${quotes.filter(d => d.status === 'Sent').length} sent</div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-ic violet">${icon('order')}</div>
+      <div><div class="stat-l">Order Forms</div><div class="stat-v">${orders.length}</div>
+      <div class="stat-s">${orders.filter(d => d.status === 'Installed').length} installed · ${orders.filter(d => ['Confirmed', 'In Progress'].includes(d.status)).length} in hand</div></div>
     </div>
     <div class="stat">
       <div class="stat-ic orange">${icon('inv')}</div>
@@ -803,7 +848,7 @@ function renderDocs() {
   renderRegionTabs();
   renderStats();
   const scoped = docs.filter(inRegion);
-  const counts = { '': scoped.length, quotation: scoped.filter(d => d.type === 'quotation').length, invoice: scoped.filter(d => d.type === 'invoice').length };
+  const counts = { '': scoped.length, quotation: scoped.filter(d => d.type === 'quotation').length, order: scoped.filter(d => d.type === 'order').length, invoice: scoped.filter(d => d.type === 'invoice').length };
   $$('#docTabs button').forEach(b => {
     b.classList.toggle('on', b.dataset.t === docsView.tab);
     b.querySelector('span').textContent = counts[b.dataset.t];
@@ -859,7 +904,7 @@ function renderDocs() {
       <tr data-id="${d.id}" tabindex="0">
         <td>
           <div class="cell-main"><span class="type-dot ${d.type}"></span>${esc(d.number) || '<i class="muted">No number</i>'}</div>
-          <div class="cell-sub">${d.type === 'invoice' ? 'Invoice' : 'Quotation'}${d.fromQuotation ? ` · from ${esc(d.fromQuotation)}` : ''}</div>
+          <div class="cell-sub">${kindOf(d.type).title}${d.fromOrder || d.fromQuotation ? ` · from ${esc(d.fromOrder || d.fromQuotation)}` : ''}</div>
         </td>
         <td>
           <div class="cell-main">${esc(d.customer.company) || '<i class="muted">No company name</i>'}</div>
@@ -869,18 +914,19 @@ function renderDocs() {
         <td><span class="chip">${d.branch === 'IN' ? 'India' : 'UAE'}</span></td>
         <td class="num">
           <div class="cell-main">${fmtMoney(t.total, d.currency, false)}${Number.isInteger(t.total) ? '.00' : ''} <small>${esc(d.currency)}</small></div>
-          ${t.adv && d.type === 'invoice' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
+          ${t.adv && d.type !== 'quotation' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
         </td>
         <td>${statusSel(d)}</td>
         <td class="act-col"><div class="acts">${editable ? `
           ${act('open', 'edit', 'Open & edit')}
           ${act('pdf', 'pdf', 'Download PDF')}
           ${act('dup', 'copy', 'Duplicate')}
-          ${d.type === 'quotation' ? act('convert', 'convert', 'Convert to invoice') : '<span class="icon-gap"></span>'}
+          ${d.type === 'quotation' ? act('order', 'order', 'Make order form') : '<span class="icon-gap"></span>'}
+          ${d.type !== 'invoice' ? act('convert', 'convert', 'Make invoice') : '<span class="icon-gap"></span>'}
           ${act('del', 'trash', 'Delete', 'danger')}` : `
           ${act('open', 'eye', 'View (other team)')}
           ${act('pdf', 'pdf', 'Download PDF')}
-          <span class="icon-gap"></span><span class="icon-gap"></span><span class="icon-gap"></span>`}
+          <span class="icon-gap"></span><span class="icon-gap"></span><span class="icon-gap"></span><span class="icon-gap"></span>`}
         </div></td>
       </tr>`;
     }).join('')}</tbody>`;
@@ -899,13 +945,16 @@ function copyAsNew(src, type) {
   });
   if (type !== src.type) {
     Object.assign(d, {
-      terms: [...S.terms[type]],
+      terms: [...(S.terms[type] || S.terms.invoice)],
       hardware: JSON.stringify(src.hardware) === JSON.stringify(defaultHardware(src.type)) ? defaultHardware(type) : src.hardware,
-      showHardware: true, showVersion: type === 'invoice',
-      showAcceptance: type === 'invoice', termsNewPage: type === 'invoice',
-      showWords: type === 'invoice', showSupport: type === 'invoice',
-      fromQuotation: src.number
+      ...typeDefaults(type)
     });
+    if (src.type === 'quotation') Object.assign(d, { fromQuotation: src.number, fromQuotationId: src.id });
+    if (src.type === 'order') {
+      d.fromOrder = src.number;
+      // an advance taken with the order carries over to the invoice
+      if (type === 'invoice' && Number(src.advance) > 0) { d.payment = clone(src.payment || {}); d.status = 'Partially Paid'; }
+    }
   }
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
   return d;
@@ -919,7 +968,7 @@ function exportCsv() {
   const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = list.map(d => {
     const t = docTotals(d), c = d.customer;
-    return [d.number, d.type === 'invoice' ? 'Invoice' : 'Quotation', fmtDate(d.date), d.branch === 'IN' ? 'India' : 'UAE',
+    return [d.number, kindOf(d.type).title, fmtDate(d.date), d.branch === 'IN' ? 'India' : 'UAE',
       c.company, c.contact, c.city, c.country, c.mobile, c.email, d.currency,
       t.sub, t.disc, t.tax, t.total, t.adv, t.balance, d.status, d.fromQuotation || ''].map(cell).join(',');
   });
@@ -992,7 +1041,8 @@ function bindDocs() {
     if (!(await confirmDiscard())) return;
     if (actName === 'open') openDoc(clone(d));
     else if (actName === 'dup') { openDoc(copyAsNew(d, d.type), true); toast('Copy created – review and Save'); }
-    else if (actName === 'convert') { openDoc(copyAsNew(d, 'invoice'), true); toast(`Invoice created from quotation ${d.number} – review and Save`); }
+    else if (actName === 'convert') { openDoc(copyAsNew(d, 'invoice'), true); toast(`Invoice created from ${kindOf(d.type).lower} ${d.number} – review and Save`); }
+    else if (actName === 'order') { openDoc(copyAsNew(d, 'order'), true); toast(`Order form created from quotation ${d.number} – review and Save`); }
   });
 
   view.addEventListener('keydown', e => {
@@ -1242,7 +1292,7 @@ async function startDocCompEdit() {
     changed(); refreshCompOpts();
   }
   refreshCmpEditor('doc');
-  $('#cmpDlgTitle').textContent = `Comparison list for this ${doc.type === 'invoice' ? 'invoice' : 'quotation'}${doc.customer.company ? ' – ' + doc.customer.company : ''}`;
+  $('#cmpDlgTitle').textContent = `Comparison list for this ${kindOf(doc.type).lower}${doc.customer.company ? ' – ' + doc.customer.company : ''}`;
   $('#cmpDlg').showModal();
 }
 
@@ -1378,18 +1428,22 @@ function settingsHTML() {
       ${sect('defaults', 'Document defaults', 'Pre-filled on every new document. You can still change them per document.', `
         <div class="grid3">
           ${field('Prepared by', inp('preparedBy'))}
-          ${field('AMC %', inp('amcPercent', 'type="number" step="any" min="0"'), 'Replaces {AMC} in the terms')}
+          ${field('AMC is', `<select data-s="amcMode">${opt('percent', '% of software price', S.amcMode)}${opt('amount', 'Fixed amount per year', S.amcMode)}</select>`, 'Replaces {AMC} in the terms')}
+          ${field('AMC %', inp('amcPercent', 'type="number" step="any" min="0"'), 'Used when AMC is a %')}
+          ${field('AMC amount', inp('amcAmount', 'type="number" step="any" min="0"'), 'Used when AMC is a fixed amount')}
           ${field('Software versions', inp('softwareVersions', 'data-csv placeholder="DataCare Next, DataCare Pro"'), 'Comma separated – offered as suggestions')}
         </div>
       `)}
 
-      ${sect('numbering', 'Numbering', 'How quotation and invoice numbers are generated. Numbers are assigned when a document is first saved.', `
-        <div class="grid2">
+      ${sect('numbering', 'Numbering', 'How quotation, order form and invoice numbers are generated. Numbers are assigned when a document is first saved.', `
+        <div class="grid3">
           ${field('Quotation number format', inp('numbering.quotation', 'class="mono"'))}
+          ${field('Order form number format', inp('numbering.order', 'class="mono"'))}
           ${field('Invoice number format', inp('numbering.invoice', 'class="mono"'))}
         </div>
-        <div class="num-preview">
+        <div class="num-preview three">
           <div><small>Next quotation</small><span id="prevQ">${numberingPreview('quotation')}</span></div>
+          <div><small>Next order form</small><span id="prevO">${numberingPreview('order')}</span></div>
           <div><small>Next invoice</small><span id="prevI">${numberingPreview('invoice')}</span></div>
         </div>
         <div class="tokens">
@@ -1402,11 +1456,14 @@ function settingsHTML() {
         ${REGION ? `<div class="counter-grid two">
           <div></div><div class="cg-h">${regionName(REGION)}</div>
           <div class="cg-l">Next quotation no.</div><div><input data-s="counters.quotation-${REGION}" type="number" min="1"></div>
+          <div class="cg-l">Next order form no.</div><div><input data-s="counters.order-${REGION}" type="number" min="1"></div>
           <div class="cg-l">Next invoice no.</div><div><input data-s="counters.invoice-${REGION}" type="number" min="1"></div>
         </div>` : `<div class="counter-grid">
           <div></div><div class="cg-h">UAE</div><div class="cg-h">India</div>
           <div class="cg-l">Next quotation no.</div>
           <div><input data-s="counters.quotation-UAE" type="number" min="1"></div><div><input data-s="counters.quotation-IN" type="number" min="1"></div>
+          <div class="cg-l">Next order form no.</div>
+          <div><input data-s="counters.order-UAE" type="number" min="1"></div><div><input data-s="counters.order-IN" type="number" min="1"></div>
           <div class="cg-l">Next invoice no.</div>
           <div><input data-s="counters.invoice-UAE" type="number" min="1"></div><div><input data-s="counters.invoice-IN" type="number" min="1"></div>
         </div>`}
@@ -1422,17 +1479,19 @@ function settingsHTML() {
         <div class="sect-foot"><button type="button" class="btn sm" id="addPreset">+ Add item</button></div>
       `)}
 
-      ${sect('text', 'Default text', 'Copied into every new document, where it can still be edited. One point per line; <code>{AMC}</code> becomes the AMC percentage.', `
+      ${sect('text', 'Default text', 'Copied into every new document, where it can still be edited. One point per line; <code>{AMC}</code> becomes the AMC (percentage or amount).', `
         <div class="grid2">
           <label class="f">Quotation terms &amp; conditions<textarea data-s="terms.quotation" data-list rows="12"></textarea>
             <span class="ta-foot"><em data-count="terms.quotation"></em><button type="button" class="btn link sm" data-resetdef="terms.quotation">Restore original</button></span></label>
           <label class="f">Invoice terms &amp; conditions<textarea data-s="terms.invoice" data-list rows="12"></textarea>
             <span class="ta-foot"><em data-count="terms.invoice"></em><button type="button" class="btn link sm" data-resetdef="terms.invoice">Restore original</button></span></label>
+          <label class="f">Order form terms &amp; conditions<textarea data-s="terms.order" data-list rows="12"></textarea>
+            <span class="ta-foot"><em data-count="terms.order"></em><button type="button" class="btn link sm" data-resetdef="terms.order">Restore original</button></span></label>
         </div>
         <div class="grid2" style="margin-top:14px">
           <label class="f">Hardware configuration – quotations (short)<textarea data-s="hardware" data-list rows="9"></textarea>
             <span class="ta-foot"><em data-count="hardware"></em><button type="button" class="btn link sm" data-resetdef="hardware">Restore original</button></span></label>
-          <label class="f">Hardware configuration – invoices (detailed)<textarea data-s="hardwareInvoice" data-list rows="9"></textarea>
+          <label class="f">Hardware configuration – order forms &amp; invoices (detailed)<textarea data-s="hardwareInvoice" data-list rows="9"></textarea>
             <span class="ta-foot"><em data-count="hardwareInvoice"></em><button type="button" class="btn link sm" data-resetdef="hardwareInvoice">Restore original</button></span></label>
         </div>
         <p class="hint" style="margin-top:8px">Write a point as <code>Title: text</code> and the title prints in bold. The short list keeps quotations on one page.</p>
@@ -1529,6 +1588,7 @@ function bindSettings() {
     if (k.startsWith('numbering.') || k.startsWith('counters.')) {
       $('#prevQ').innerHTML = numberingPreview('quotation');
       $('#prevI').innerHTML = numberingPreview('invoice');
+      $('#prevO').innerHTML = numberingPreview('order');
     }
     if (el.hasAttribute('data-list')) updateCounts(p);
     if (k === 'template') $('#tplSel').value = v;

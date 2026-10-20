@@ -50,7 +50,7 @@ function brandName(S) {
 
 function premiumHeader(d, S, first) {
   const isInv = d.type === 'invoice';
-  const title = isInv ? 'Invoice' : 'Quotation';
+  const title = kindOf(d.type).title;
   const brand = S.logo && S.logoHasName
     ? `<img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">`
     : `<div class="p-brand">${brandMark(S, first ? 64 : 36)}
@@ -102,6 +102,7 @@ function newPagePremium(d, S, index) {
 
 function buildBlocksPremium(d, S) {
   const isInv = d.type === 'invoice';
+  const isOrder = d.type === 'order';
   const cur = d.currency;
   const c = d.customer;
   const T = docTotals(d);
@@ -112,12 +113,12 @@ function buildBlocksPremium(d, S) {
 
   // Parties
   const place = [c.city && `${uae ? 'Emirate' : 'City'}: ${c.city}`, c.country && `Country: ${c.country}`].filter(Boolean);
-  add(`<p class="p-intro">${isInv
+  add(`<p class="p-intro">${isInv || isOrder
       ? 'We are going to book the order as per following details confirmed by you:'
       : 'We are going to quote as per following details confirmed by you:'}</p>
     <div class="p-parties">
       <div class="p-card">
-        <div class="p-label">${isInv ? 'Billed To' : 'Prepared For'}</div>
+        <div class="p-label">${isInv ? 'Billed To' : isOrder ? 'Order For' : 'Prepared For'}</div>
         <div class="p-company">${esc(c.company) || '&nbsp;'}</div>
         ${line('Contact', c.contact)}
         ${line('', c.address)}
@@ -133,7 +134,9 @@ function buildBlocksPremium(d, S) {
           ${d.showVersion && d.softwareVersion ? `<span>Software</span><b>${esc(d.softwareVersion)}${d.edition ? ' ' + esc(d.edition) : ''}</b>` : ''}
           <span>Prepared by</span><b>${esc(d.preparedBy)}</b>
           <span>Mobile</span><b>${esc(d.preparedMobile)}</b>
+          ${isOrder && d.installDate ? `<span>Installation</span><b>${esc(fmtDate(d.installDate))}</b>` : ''}
           ${d.fromQuotation ? `<span>Quotation Ref.</span><b>${esc(d.fromQuotation)}</b>` : ''}
+          ${d.fromOrder ? `<span>Order Ref.</span><b>${esc(d.fromOrder)}</b>` : ''}
         </div>
       </div>
     </div>`);
@@ -170,10 +173,10 @@ function buildBlocksPremium(d, S) {
     tot += `<div class="p-grand paid"><span>Total Paid</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
     tot += tr('Balance Due', pMoney(0, cur), 'adv');
   } else {
-    tot += `<div class="p-grand"><span>Total Payable</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
+    tot += `<div class="p-grand"><span>${isOrder ? 'Total Order Value' : 'Total Payable'}</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
     if (T.adv) {
       tot += tr('Advance Received', '− ' + pMoney(T.adv, cur), 'adv');
-      tot += `<div class="p-balance"><span>Balance Due</span><b>${esc(cur)} ${pMoney(T.balance, cur)}</b></div>`;
+      tot += `<div class="p-balance"><span>${isOrder ? 'Balance Payable' : 'Balance Due'}</span><b>${esc(cur)} ${pMoney(T.balance, cur)}</b></div>`;
     }
   }
   const wordsAmount = paidInFull || !T.adv ? T.total : T.balance;
@@ -181,8 +184,10 @@ function buildBlocksPremium(d, S) {
     ? `<div class="p-label">Amount in Words</div><div class="p-words-t">${esc(amountInWords(wordsAmount, cur))}</div>` : '';
   const notes = d.notes && d.notes.trim()
     ? `<div class="p-label${words ? ' mt' : ''}">Note</div><div class="p-note">${esc(d.notes).replace(/\n/g, '<br>')}</div>` : '';
+  const payTerms = isOrder && (d.paymentTerms || '').trim()
+    ? `<div class="p-label${words || notes ? ' mt' : ''}">Payment Terms</div><div class="p-note">${esc(d.paymentTerms)}</div>` : '';
   add(`<div class="p-sum">
-      <div class="p-words${words || notes ? '' : ' empty'}">${words}${notes}</div>
+      <div class="p-words${words || notes || payTerms ? '' : ' empty'}">${words}${notes}${payTerms}</div>
       <div class="p-totals">${tot}</div>
     </div>`);
 
@@ -235,7 +240,7 @@ function buildBlocksPremium(d, S) {
   const CHUNK = 6;
   for (let i = 0; i < terms.length; i += CHUNK) {
     const html = terms.slice(i, i + CHUNK).map((t, j) =>
-      `<div class="p-term"><b>${String(i + j + 1).padStart(2, '0')}</b><span>${renderTerm(t, d.amcPercent)}</span></div>`).join('');
+      `<div class="p-term"><b>${String(i + j + 1).padStart(2, '0')}</b><span>${renderTerm(t, d)}</span></div>`).join('');
     add(`${i === 0 ? '<div class="p-sec">Terms &amp; Conditions</div>' : ''}<div class="p-terms">${html}</div>`,
       i === 0 ? { breakBefore: d.termsNewPage } : {});
   }

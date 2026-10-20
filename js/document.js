@@ -92,6 +92,7 @@ function infoSection(d, S) {
   let payment = null;
   if (isPaidInvoice(d)) payment = { title: 'Payment Received', amount: T.total, note: 'Paid in full. Thank you for your payment.' };
   else if (d.type === 'invoice' && d.status === 'Partially Paid' && T.adv) payment = { title: 'Advance Received', amount: T.adv, balance: T.balance };
+  else if (d.type === 'order' && T.adv && d.status !== 'Cancelled') payment = { title: 'Advance Received', amount: T.adv, balance: T.balance };
   if (payment) Object.assign(payment, { date: pay.date || '', mode: pay.mode || '', ref: pay.ref || '' });
 
   const on = d.showSupport === undefined ? d.type === 'invoice' : !!d.showSupport;
@@ -175,8 +176,19 @@ function splitTitled(line) {
   return m ? { title: m[1], text: m[2] } : { title: '', text: String(line || '').trim() };
 }
 
-function renderTerm(text, amc) {
-  return esc(text).replace(/\{AMC\}/g, `<b><u>${Number(amc || 0).toFixed(2)} %</u></b>`);
+/** AMC as printed in the terms: "10.00 %" (of the software price) or a fixed amount such as "AED 700.00". */
+function amcLabel(d) {
+  if (d.amcMode === 'amount') {
+    const v = round2(d.amcAmount).toLocaleString((CURRENCIES[d.currency] || CURRENCIES.AED).locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${d.currency} ${v}`;
+  }
+  return `${Number(d.amcPercent || 0).toFixed(2)} %`;
+}
+
+/** Replaces {AMC} in a term. With a fixed amount, a following "of the software price" is dropped. */
+function renderTerm(text, d) {
+  return esc(text).replace(/\{AMC\}( of the software price)?/g, (m, tail) =>
+    `<b><u>${esc(amcLabel(d))}</u></b>${d.amcMode === 'amount' ? '' : (tail || '')}`);
 }
 
 function checkbox(on) {
@@ -223,6 +235,8 @@ function footerHTML(d, S) {
 /** Returns the flowing body blocks, in order. */
 function buildBlocks(d, S) {
   const isInv = d.type === 'invoice';
+  const K = kindOf(d.type);
+  const booked = d.type !== 'quotation';   // order forms and invoices book a confirmed order
   const cur = d.currency;
   const c = d.customer;
   const T = docTotals(d);
@@ -232,11 +246,11 @@ function buildBlocks(d, S) {
 
   // Title row: number | title | date
   add(`<div class="d-title">
-      <div>${d.number ? `<div class="box">${isInv ? 'Inv' : 'Quot'} No: ${esc(d.number)}</div>` : ''}</div>
-      <h1>${isInv ? 'Invoice' : 'Quotation'}${isPaidInvoice(d) ? ' <span class="paid-tag">PAID</span>' : ''}</h1>
+      <div>${d.number ? `<div class="box">${K.short} No: ${esc(d.number)}</div>` : ''}</div>
+      <h1>${K.title}${isPaidInvoice(d) ? ' <span class="paid-tag">PAID</span>' : ''}</h1>
       <div class="right"><div class="box">Date:&nbsp;&nbsp; ${esc(fmtDate(d.date))}</div></div>
     </div>
-    <p class="intro${isInv ? ' b' : ''}">${isInv
+    <p class="intro${booked ? ' b' : ''}">${booked
       ? 'We are going to book the order as per following details confirmed by you:'
       : 'We are going to quote as per following details confirmed by you:'}</p>`);
 
@@ -283,17 +297,18 @@ function buildBlocks(d, S) {
     tot += `<tr class="total"><td>Total Paid Amount:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
     tot += `<tr class="sub"><td>Balance Due:</td><td class="amt">Nil</td></tr>`;
   } else {
-    tot += `<tr class="total"><td>Total Payable Amount:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
+    tot += `<tr class="total"><td>${d.type === 'order' ? 'Total Order Value' : 'Total Payable Amount'}:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
     if (T.adv) {
       tot += `<tr class="sub"><td>Advance Received:</td><td class="amt">${fmtMoney(T.adv, cur)}</td></tr>`;
-      tot += `<tr class="total"><td>Balance Due:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
+      tot += `<tr class="total"><td>${d.type === 'order' ? 'Balance Payable' : 'Balance Due'}:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
     }
   }
   add(`<table class="items">
       <thead><tr><th>Description</th><th class="amt">Price (${esc(cur)})</th></tr></thead>
       <tbody>${rows || '<tr><td>&nbsp;</td><td></td></tr>'}${tot}</tbody>
     </table>
-    ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(paidInFull || !T.adv ? T.total : T.balance, cur))}</p>` : ''}`);
+    ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(paidInFull || !T.adv ? T.total : T.balance, cur))}</p>` : ''}
+    ${d.type === 'order' && (d.installDate || (d.paymentTerms || '').trim()) ? `<p class="words">${d.installDate ? `<b>Expected installation:</b> ${esc(fmtDate(d.installDate))}` : ''}${d.installDate && d.paymentTerms ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' : ''}${(d.paymentTerms || '').trim() ? `<b>Payment terms:</b> ${esc(d.paymentTerms)}` : ''}</p>` : ''}`);
 
   if (d.notes && d.notes.trim()) {
     add(`<div class="notes"><b>Note:</b> ${esc(d.notes).replace(/\n/g, '<br>')}</div>`);
@@ -304,7 +319,7 @@ function buildBlocks(d, S) {
     const items = list.filter(t => t && t.trim());
     if (!items.length) return;
     items.forEach((t, i) => {
-      const li = `<div class="bl">${renderTerm(t, d.amcPercent)}</div>`;
+      const li = `<div class="bl">${renderTerm(t, d)}</div>`;
       add(i === 0 ? `<h3 class="sec-h">${title}</h3>${li}` : li, i === 0 ? opts : {});
     });
   };

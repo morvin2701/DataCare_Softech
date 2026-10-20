@@ -723,3 +723,23 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .cmp-dlg-body input.cv.add { color: #4a5366; background: #eef0f4; }
 .cmp-dlg-body input.cg-name { width: 300px; max-width: 60%; font-weight: 700; margin-right: 10px; }
 @media (max-width: 960px) { .cmp-dlg-head { flex-direction: column; } .cmp-dlg-head .btn { align-self: stretch; } }
+
+/* order forms */
+.type-dot.order { background: #7c4dcc; }
+.stat-ic.violet { background: #f1ebfb; color: #6b3fbf; }
+.status-sel.s-Confirmed { background-color: #e8f2fb; color: #145c94; }
+.status-sel.s-In-Progress { background-color: #fff7da; color: #8a6400; }
+.status-sel.s-Installed { background-color: #e6f6ec; color: #1f7a42; }
+.next-step { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; padding: 10px 12px; border-radius: 10px; background: linear-gradient(135deg, #fff6ee, #fff1e6); border: 1px solid #f6c29d; font-size: 13px; font-weight: 600; color: #8a4a17; }
+.seg3 button { padding-left: 4px; padding-right: 4px; font-size: 12.5px; }
+.num-preview.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 960px) { .num-preview.three { grid-template-columns: 1fr; } #view-editor .form .next-step { margin-top: 12px; } }
+
+/* keep the editor toolbar on one line: the document name shortens instead */
+@media (min-width: 961px) {
+  #view-editor .preview-toolbar { flex-wrap: nowrap; }
+  #view-editor .pt-left { min-width: 0; flex: 1; display: flex; align-items: center; }
+  #view-editor .doc-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  #view-editor .dirty { white-space: nowrap; flex: none; }
+  #view-editor .pt-right { flex: none; }
+}
