@@ -198,6 +198,32 @@ app.delete('/api/docs/:id', requireUser, wrap(async (req, res) => {
   res.json({ ok: true, deleted: await db.deleteDoc(req.params.id) });
 }));
 
+/* ---------- signed copies: upload (JSON with base64) and download ---------- */
+const FILE_TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' };
+app.post('/api/docs/:id/files', requireUser, wrap(async (req, res) => {
+  const current = await db.getDocBranch(req.params.id);
+  if (!current) throw fail(404, 'Save the document before uploading a signed copy.');
+  if (!canWriteRegion(req.user, current)) throw fail(403, 'This document belongs to the other team.');
+  const { fileName, mimeType, data, kind } = req.body || {};
+  if (!FILE_TYPES[mimeType]) throw fail(400, 'Only PDF, JPG, PNG, WEBP or HEIC files can be uploaded.');
+  const content = Buffer.from(String(data || ''), 'base64');
+  if (!content.length) throw fail(400, 'The file is empty.');
+  if (content.length > 15 * 1024 * 1024) throw fail(400, 'The file is larger than 15 MB.');
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await db.putFile({ id, docId: req.params.id, kind: String(kind || 'signed').slice(0, 20), fileName: String(fileName || 'signed.' + FILE_TYPES[mimeType]).slice(0, 200),
+    mimeType, size: content.length, content, uploadedBy: req.user.displayName });
+  res.json({ id, url: `/api/files/${id}`, size: content.length, mimeType });
+}));
+
+app.get('/api/files/:id', requireUser, wrap(async (req, res) => {
+  const f = await db.getFile(req.params.id);
+  if (!f) throw fail(404, 'file not found');
+  res.set('Content-Type', f.MimeType);
+  res.set('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${encodeURIComponent(f.FileName)}"`);
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.send(f.Content);
+}));
+
 app.post('/api/import', requireUser, wrap(async (req, res) => {
   const { settings, docs, region } = req.body || {};
   const target = db.REGIONS.includes(region) ? region : req.user.region;

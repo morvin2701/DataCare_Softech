@@ -350,6 +350,7 @@ function buildBlocks(d, S) {
   // Prepared by
   add(`<div class="prep">
       <div>Prepared By: ${esc(d.preparedBy)}</div>
+      ${d.type === 'order' && d.employee && d.employee !== d.preparedBy ? `<div>Handled By: ${esc(d.employee)}</div>` : ''}
       <div>Mobile: ${esc(d.preparedMobile)}</div>
     </div>
     ${d.showStamp && S.stamp ? `<div class="stamp-wrap"><img class="stamp" src="${S.stamp}" alt=""><div class="stamp-cap">For ${esc(S.legalName)}</div></div>` : ''}`, d.type === 'quotation' ? { preferFirst: true } : {});

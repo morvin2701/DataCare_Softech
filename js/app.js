@@ -41,11 +41,13 @@ function setDbStatus(state) {
   else { el.textContent = 'Browser storage'; el.title = 'The database server is not running – data is kept in this browser only. Start server/start.bat to use SQL Server.'; }
 }
 
+/** Sends a document to the database. Returns a promise that settles once it has been accepted (or refused). */
 function remotePutDoc(d) {
-  if (!API.online) return;
-  API.putDoc(clone(d)).catch(err => {
+  if (!API.online) return Promise.resolve(null);
+  return API.putDoc(clone(d)).catch(err => {
     if (err.status === 409) resolveDuplicateNumber(d.id, err.body && err.body.number);
     else toast('Could not save to the database – will retry automatically.', true);
+    return null;
   });
 }
 
@@ -140,6 +142,7 @@ function newDoc(type, branch) {
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
     showStamp: false, payment: { date: '', mode: '', ref: '' },
     installDate: '', paymentTerms: '',
+    employee: (USER && USER.displayName) || '', history: [],
     ...typeDefaults(type)
   };
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
@@ -155,6 +158,9 @@ function normalizeDoc(d) {
   if (d.amcAmount === undefined) d.amcAmount = 0;
   if (d.installDate === undefined) d.installDate = '';
   if (d.paymentTerms === undefined) d.paymentTerms = '';
+  if (d.employee === undefined) d.employee = d.createdBy || '';
+  if (!Array.isArray(d.history)) d.history = [];
+  if (d.type === 'order' && ['Confirmed', 'In Progress', 'Installed'].includes(d.status)) d.status = d.status === 'Installed' ? 'Completed' : 'Pending';   // statuses renamed
   if (d.edition === undefined) d.edition = '';
   if (!Array.isArray(d.compHideCols)) d.compHideCols = [];
   if (!Array.isArray(d.compHideRows)) d.compHideRows = [];
@@ -215,11 +221,15 @@ function formHTML(d) {
       <label class="f">Date<input type="date" data-f="date"></label>
     </div>
     <div class="hint" id="numHint"></div>
+    <div class="row one"><label class="f">Employee <span class="req">required</span><input data-f="employee" list="empList" placeholder="Who is preparing this document?" autocomplete="off"></label></div>
+    <datalist id="empList">${[...new Set([USER && USER.displayName, ...(teamContacts || []).map(c => c.name), ...docs.map(x => x.employee)].filter(Boolean))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
     <div class="row">
       <label class="f">Currency<select data-f="currency">${Object.keys(CURRENCIES).map(c => opt(c, c, d.currency)).join('')}</select></label>
       <label class="f">Status<select data-f="status">${STATUSES[d.type].map(s => opt(s, s, d.status)).join('')}</select></label>
     </div>
   </fieldset>
+
+  <fieldset class="fs"><legend>Activity</legend><div id="histBox">${historyHTML(d)}</div></fieldset>
 
   <fieldset class="fs"><legend>Customer</legend>
     <div class="row one"><label class="f">Company Name<input data-f="customer.company" list="custList" autocomplete="off" placeholder="Start typing – saved customers autofill"></label></div>
@@ -348,6 +358,7 @@ function loadForm() {
 /** Push doc values into inputs (skipping the one being typed in). */
 function syncForm() {
   $$('#form [data-f]').forEach(el => { if (el !== document.activeElement) writeVal(el, getPath(doc, el.dataset.f)); });
+  const st = $('#form [data-f="status"]'); if (st) st.dataset.prev = doc.status;
   $$('#form [data-seg]').forEach(seg => {
     const v = getPath(doc, seg.dataset.seg);
     $$('button', seg).forEach(b => b.classList.toggle('on', b.dataset.v === v));
@@ -475,6 +486,13 @@ function onField(f, el) {
     refreshCompOpts();
   } else if (f === 'advance' && doc.type === 'order' && Number(doc.advance) > 0 && !doc.payment.date) {
     doc.payment.date = todayISO();
+  } else if (f === 'status' && doc.type === 'order') {
+    const prev = el.dataset.prev || doc.history.filter(h => h.status).slice(-1)[0]?.status || STATUSES.order[0];
+    if (!readOnly && el.value !== prev) {
+      doc.status = prev;                       // keep the old value until the change is confirmed
+      changeOrderStatus(doc, el.value, prev);  // async: dialog, then applies + saves
+      return;
+    }
   } else if (f === 'status') {
     // marking an invoice paid: assume it was paid today unless a date is already entered
     if (doc.type === 'invoice' && (doc.status === 'Paid' || doc.status === 'Partially Paid') && !doc.payment.date) doc.payment.date = todayISO();
@@ -554,6 +572,8 @@ function bindForm() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.make) { makeNext(b.dataset.make); return; }
+    if (b.dataset.openFile) { openSignedFile(b.dataset.openFile); return; }
+    if (b.dataset.complete !== undefined) { changeOrderStatus(doc, 'Completed', doc.status); return; }
     if (b.dataset.compEdit !== undefined) { startDocCompEdit(); return; }
     if (b.dataset.compReset !== undefined) { resetDocComp(); return; }
     if (b.dataset.compCols || b.dataset.compRows) {
@@ -592,9 +612,22 @@ function bindForm() {
 }
 
 /* ---------------- saving ---------------- */
+/* ---------------- history (who did what, when) ---------------- */
+function addHistory(d, action, extra = {}) {
+  d.history = d.history || [];
+  d.history.push({ at: new Date().toISOString(), by: d.employee || (USER && USER.displayName) || '', action, ...extra });
+}
+const employeeOk = d => !!String(d.employee || '').trim();
+function employeeMissing() {
+  toast('Enter the employee name (Document section) before saving.', true);
+  const el = $('[data-f="employee"]');
+  if (el) { el.focus(); el.classList.add('field-missing'); setTimeout(() => el.classList.remove('field-missing'), 1600); }
+}
+
 /** Turns the open quotation into an order form, or an order form into an invoice (saving it first). */
 async function makeNext(type) {
   if (readOnly) return;
+  if (!employeeOk(doc)) { employeeMissing(); return; }
   if ((dirty || !isSaved(doc)) && !saveDoc(true)) return;
   const src = doc;
   openDoc(copyAsNew(src, type), true);
@@ -604,6 +637,9 @@ async function makeNext(type) {
 
 function saveDoc(silent = false) {
   if (readOnly) { toast(`This document belongs to the ${regionName(doc.branch)} team and can only be viewed.`, true); return false; }
+  if (!employeeOk(doc)) { employeeMissing(); return false; }
+  const firstSave = !isSaved(doc);
+  if (firstSave) addHistory(doc, 'created', { status: doc.status, from: doc.fromOrder || doc.fromQuotation || '' });
   if (doc.autoNumber && !doc.numberAssigned) {
     const r = nextNumber(doc.type, doc.branch, doc.date);
     doc.number = r.number;
@@ -634,6 +670,7 @@ function saveDoc(silent = false) {
   $('#dirtyFlag').hidden = true;
   persistDraft();
   syncForm();
+  refreshHistory();
   refreshCustomerList();
   renderPreview();
   if (!silent) toast(`Saved ${kindOf(doc.type).lower} ${doc.number}`);
@@ -763,7 +800,8 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="3"/><path d="M16 15.5a6 6 0 0 1 6 4.5"/>',
   ban: '<circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/>',
-  check: '<path d="M5 12l5 5L20 7"/>'
+  check: '<path d="M5 12l5 5L20 7"/>',
+  upload: '<path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>'
 };
 const icon = (name, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -918,7 +956,7 @@ function renderDocs() {
           <div class="cell-main">${fmtMoney(t.total, d.currency, false)}${Number.isInteger(t.total) ? '.00' : ''} <small>${esc(d.currency)}</small></div>
           ${t.adv && d.type !== 'quotation' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
         </td>
-        <td>${statusSel(d)}</td>
+        <td>${statusSel(d)}${d.type === 'order' && d.history && d.history.length ? (() => { const h = d.history[d.history.length - 1]; return `<div class="cell-sub">${esc(h.by || d.employee || '')} · <span title="${esc(fmtDateTime(h.at))}">${esc(timeAgo(h.at))}</span>${d.signedFile ? ' · ✓ signed' : ''}</div>`; })() : (d.employee ? `<div class="cell-sub">${esc(d.employee)}</div>` : '')}</td>
         <td class="act-col"><div class="acts">${editable ? `
           ${act('open', 'edit', 'Open & edit')}
           ${act('pdf', 'pdf', 'Download PDF')}
@@ -943,7 +981,8 @@ function copyAsNew(src, type) {
   Object.assign(d, {
     id: uid(), type, autoNumber: true, numberAssigned: false, number: '',
     date: todayISO(), status: STATUSES[type][0], createdAt: undefined, updatedAt: undefined,
-    payment: { date: '', mode: '', ref: '' }
+    payment: { date: '', mode: '', ref: '' },
+    employee: (USER && USER.displayName) || src.employee || '', history: [], signedFile: null
   });
   if (type !== src.type) {
     Object.assign(d, {
@@ -1057,8 +1096,14 @@ function bindDocs() {
     const id = sel.closest('tr').dataset.id;
     const i = docs.findIndex(x => x.id === id);
     if (i < 0 || !canEdit(docs[i])) return;
-    docs[i].status = sel.value;
     normalizeDoc(docs[i]);
+    if (docs[i].type === 'order') {
+      const want = sel.value, prev = docs[i].status;
+      sel.value = prev;                                   // restored until the dialog confirms
+      changeOrderStatus(docs[i], want, prev);
+      return;
+    }
+    docs[i].status = sel.value;
     if (docs[i].type === 'invoice' && (sel.value === 'Paid' || sel.value === 'Partially Paid') && !docs[i].payment.date) docs[i].payment.date = todayISO();
     docs[i].updatedAt = new Date().toISOString();
     if (!Store.set('dc_docs', docs) && !API.online) { toast('Could not save – browser storage is full or blocked.', true); return; }
@@ -1068,6 +1113,88 @@ function bindDocs() {
     renderDocs();
   });
 }
+
+/* ---------------- order status changes (signed copy + employee required) ---------------- */
+let signedFileCache = null;   // { file, name, size, type } chosen in the dialog
+
+/** Returns true when the status was changed (and the document saved). */
+async function changeOrderStatus(d, next, prev) {
+  if (next === prev) return false;
+  const inEditor = d === doc;
+  const needsFile = next === 'Completed' && !(d.signedFile && d.signedFile.id);
+  const serverOk = API.online;
+  signedFileCache = null;
+  const fields = [
+    { name: 'employee', label: 'Employee name', value: d.employee || (USER && USER.displayName) || '', required: true, full: true, placeholder: 'Who is making this change?' },
+    ...(needsFile ? [{ name: 'signedFile', label: 'Signed order form (PDF or photo)', type: 'file', accept: '.pdf,image/*', required: true, full: true, hint: 'Required to mark the order Completed. Max 15 MB.' }] : []),
+    { name: 'note', label: 'Note (optional)', type: 'text', full: true, placeholder: next === 'Cancelled' ? 'Reason for cancelling' : 'e.g. installed at the shop, trained 2 staff' }
+  ];
+  const titles = { Completed: 'Mark order as Completed', Cancelled: 'Cancel this order', Pending: 'Move order back to Pending' };
+  const v = await formDialog({
+    title: `${titles[next] || 'Change status'} – ${d.number || 'order'}`,
+    fields, ok: next === 'Cancelled' ? 'Cancel order' : `Mark ${next}`,
+    submit: async vals => {
+      if (!vals.employee.trim()) throw new Error('The employee name is required.');
+      if (needsFile) {
+        const f = $('#formDlgForm [name=signedFile]').files[0];
+        if (!f) throw new Error('Upload the signed order form to complete the order.');
+        if (!/^(application\/pdf|image\/)/.test(f.type)) throw new Error('Only a PDF or an image (JPG, PNG, HEIC) can be uploaded.');
+        if (f.size > 15 * 1024 * 1024) throw new Error('The file is larger than 15 MB.');
+        if (!serverOk) throw new Error('The signed copy is stored in the database – connect to the server to complete orders.');
+        if (!isSaved(d) || (inEditor && dirty)) { if (!saveDoc(true)) throw new Error('Could not save the order first.'); }
+        // the save travels to the database in the background: wait for it, so the upload finds the order there
+        const sent = await Promise.race([remotePutDoc(d), new Promise(r => setTimeout(() => r('timeout'), 20000))]);
+        if (!sent || sent === 'timeout') throw new Error('The order could not be saved to the database. Check the connection and try again.');
+        const up = await API.uploadFile(d.id, f, 'signed');
+        d.signedFile = { id: up.id, name: f.name, size: f.size, type: f.type, at: new Date().toISOString(), by: vals.employee.trim() };
+      }
+    }
+  });
+  if (!v) { if (inEditor) syncForm(); return false; }
+  d.employee = v.employee.trim();
+  d.status = next;
+  addHistory(d, 'status', { status: next, note: (v.note || '').trim(), file: d.signedFile && next === 'Completed' ? d.signedFile.id : undefined });
+  if (inEditor) { dirty = true; saveDoc(true); syncForm(); refreshHistory(); }
+  else {
+    d.updatedAt = new Date().toISOString();
+    Store.set('dc_docs', docs); remotePutDoc(d);
+    if (doc.id === d.id) { Object.assign(doc, { status: d.status, employee: d.employee, history: clone(d.history), signedFile: clone(d.signedFile) }); persistDraft(); }
+    renderDocs();
+  }
+  toast(`${d.number} marked ${next}`);
+  return true;
+}
+
+async function openSignedFile(fileId) {
+  try { const url = await API.fileBlobUrl(fileId); window.open(url, '_blank'); }
+  catch (e) { toast('Could not open the signed copy: ' + e.message, true); }
+}
+
+/* ----- activity panel in the editor ----- */
+const ACTION_LABEL = { created: 'Created', status: 'Status changed', upload: 'Signed copy uploaded' };
+function historyHTML(d) {
+  const items = [...(d.history || [])].reverse();
+  const sf = d.signedFile;
+  return `
+    ${d.type === 'order' ? `<div class="signed-box${sf ? ' has' : ''}">
+      <div class="signed-ic">${icon(sf ? 'check' : 'upload')}</div>
+      <div class="signed-txt">
+        <b>${sf ? 'Signed copy on file' : 'No signed copy yet'}</b>
+        <small>${sf ? `${esc(sf.name)} · ${(sf.size / 1024).toFixed(0)} KB · uploaded by ${esc(sf.by || '')} <span class="ago" data-at="${esc(sf.at)}" title="${esc(fmtDateTime(sf.at))}">${esc(timeAgo(sf.at))}</span>` : 'Upload the customer-signed order form when the order is completed.'}</small>
+      </div>
+      ${sf ? `<button type="button" class="btn sm" data-open-file="${esc(sf.id)}">View</button>` : (readOnly ? '' : `<button type="button" class="btn sm primary" data-complete>Mark Completed</button>`)}
+    </div>` : ''}
+    <div class="hist">
+      ${items.length ? items.map(h => `<div class="hist-item ${esc(h.action)}">
+        <span class="hist-dot"></span>
+        <div class="hist-body">
+          <div class="hist-main"><b>${esc(ACTION_LABEL[h.action] || h.action)}</b>${h.status ? ` <span class="status-pill s-${esc(h.status).replace(/\s+/g, '-')}">${esc(h.status)}</span>` : ''}${h.from ? ` <span class="muted">from ${esc(h.from)}</span>` : ''}</div>
+          <div class="hist-sub">${h.by ? `<span class="hist-by">${esc(h.by)}</span> · ` : ''}<span class="ago" data-at="${esc(h.at)}" title="${esc(fmtDateTime(h.at))}">${esc(timeAgo(h.at))}</span>${h.note ? ` · <em>${esc(h.note)}</em>` : ''}${h.file ? ` · <button type="button" class="btn link sm" data-open-file="${esc(h.file)}">signed copy</button>` : ''}</div>
+        </div>
+      </div>`).join('') : '<div class="hist-empty">No activity yet – it is recorded when you save.</div>'}
+    </div>`;
+}
+function refreshHistory() { const b = $('#histBox'); if (b) b.innerHTML = historyHTML(doc); }
 
 /* ---------------- confirm dialog ---------------- */
 function ask({ title, message, ok = 'OK', cancel = 'Cancel', danger = false }) {
@@ -1302,6 +1429,17 @@ async function resetDocComp() {
   if (!(await ask({ title: 'Go back to the default list?', message: 'Your changes to the comparison list of this document are removed. The default list from Settings is used again.', ok: 'Use default list', danger: true }))) return;
   doc.compCustom = null;
   changed(); refreshCompOpts();
+}
+
+function bindFilePickers() {
+  document.addEventListener('change', e => {
+    const inp = e.target;
+    if (inp.type !== 'file' || !inp.closest('.file-pick')) return;
+    const ui = inp.closest('.file-pick').querySelector('.file-pick-ui');
+    const f = inp.files[0];
+    ui.innerHTML = f ? `<b>${esc(f.name)}</b><small>${(f.size / 1024).toFixed(0)} KB · click to change</small>` : '<b>Choose file</b><small>PDF or photo</small>';
+    ui.classList.toggle('picked', !!f);
+  });
 }
 
 function bindDocCompEditor() {
@@ -1877,16 +2015,19 @@ function formDialog({ title, fields, ok = 'Save', submit }) {
   dlg.classList.toggle('wide', fields.length > 3);
   $('#formDlgTitle').textContent = title;
   $('#formDlgOk').textContent = ok;
+  form.setAttribute('novalidate', '');
   body.innerHTML = fields.map(f => `<label class="f${f.full ? ' full' : ''}">${esc(f.label)}${
     f.type === 'select'
       ? `<select name="${f.name}">${f.options.map(([v, l]) => opt(v, l, f.value)).join('')}</select>`
-      : `<input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''} autocomplete="${f.autocomplete || 'off'}">`
+      : f.type === 'file'
+        ? `<span class="file-pick"><input name="${f.name}" type="file"${f.accept ? ` accept="${f.accept}"` : ''}><span class="file-pick-ui"><b>Choose file</b><small>PDF or photo</small></span></span>`
+        : `<input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''} autocomplete="${f.autocomplete || 'off'}">`
   }${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>`).join('');
   err.hidden = true;
   return new Promise(resolve => {
     const onSubmit = async e => {
       e.preventDefault();
-      const values = Object.fromEntries(fields.map(f => [f.name, form.elements[f.name].value]));
+      const values = Object.fromEntries(fields.map(f => [f.name, f.type === 'file' ? (form.elements[f.name].files[0] ? form.elements[f.name].files[0].name : '') : form.elements[f.name].value]));
       $('#formDlgOk').disabled = true;
       try {
         if (submit) await submit(values);
@@ -2010,9 +2151,11 @@ async function init() {
   API.onUnauthorized = () => { if (USER) { USER = null; showLogin('Your session has ended – please sign in again.'); } };
   await API.detect();
   setInterval(() => API.flush(), 15000);
+  setInterval(() => { $$('.ago[title]').forEach(el => { const iso = el.dataset.at; if (iso) el.textContent = timeAgo(iso); }); }, 60000);
   window.addEventListener('online', () => API.flush());
 
   bindForm();
+  bindFilePickers();
   bindDocCompEditor();
   bindDocs();
   bindSettings();

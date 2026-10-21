@@ -88,6 +88,22 @@ async function init() {
     IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Documents_Updated')
     CREATE INDEX IX_Documents_Updated ON dbo.Documents (UpdatedAt DESC);
 
+    -- signed order forms (PDF / image) uploaded when an order is completed
+    IF OBJECT_ID('dbo.DocumentFiles', 'U') IS NULL
+    CREATE TABLE dbo.DocumentFiles (
+      Id         NVARCHAR(40)   NOT NULL CONSTRAINT PK_DocumentFiles PRIMARY KEY,
+      DocId      NVARCHAR(40)   NOT NULL,
+      Kind       NVARCHAR(20)   NOT NULL,
+      FileName   NVARCHAR(200)  NOT NULL,
+      MimeType   NVARCHAR(100)  NOT NULL,
+      Size       INT            NOT NULL,
+      Content    VARBINARY(MAX) NOT NULL,
+      UploadedBy NVARCHAR(100)  NULL,
+      UploadedAt DATETIME2      NOT NULL CONSTRAINT DF_DocumentFiles_UploadedAt DEFAULT SYSUTCDATETIME()
+    );
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_DocumentFiles_Doc')
+    CREATE INDEX IX_DocumentFiles_Doc ON dbo.DocumentFiles (DocId);
+
     IF OBJECT_ID('dbo.Users', 'U') IS NULL
     CREATE TABLE dbo.Users (
       Id           INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Users PRIMARY KEY,
@@ -309,8 +325,25 @@ async function putDoc(d, by, request = pool.request()) {
 }
 
 async function deleteDoc(id) {
-  const r = await pool.request().input('id', sql.NVarChar(40), id).query('DELETE FROM dbo.Documents WHERE Id = @id');
-  return r.rowsAffected[0] > 0;
+  const r = await pool.request().input('id', sql.NVarChar(40), id)
+    .query('DELETE FROM dbo.DocumentFiles WHERE DocId = @id; DELETE FROM dbo.Documents WHERE Id = @id');
+  return r.rowsAffected[r.rowsAffected.length - 1] > 0;
+}
+
+/* ---------- files attached to a document (signed order forms) ---------- */
+async function putFile(f) {
+  await pool.request()
+    .input('id', sql.NVarChar(40), f.id).input('doc', sql.NVarChar(40), f.docId).input('kind', sql.NVarChar(20), f.kind)
+    .input('name', sql.NVarChar(200), f.fileName).input('mime', sql.NVarChar(100), f.mimeType).input('size', sql.Int, f.size)
+    .input('content', sql.VarBinary(sql.MAX), f.content).input('by', sql.NVarChar(100), f.uploadedBy || null)
+    .query(`INSERT INTO dbo.DocumentFiles (Id, DocId, Kind, FileName, MimeType, Size, Content, UploadedBy)
+            VALUES (@id, @doc, @kind, @name, @mime, @size, @content, @by)`);
+}
+
+async function getFile(id) {
+  const r = await pool.request().input('id', sql.NVarChar(40), id)
+    .query('SELECT Id, DocId, Kind, FileName, MimeType, Size, Content, UploadedBy, UploadedAt FROM dbo.DocumentFiles WHERE Id = @id');
+  return r.recordset[0] || null;
 }
 
 /** Replaces one region's settings and documents (used by "Import backup"). All or nothing. */
@@ -339,5 +372,6 @@ module.exports = {
   init, isDuplicate, REGIONS, DB_NAME,
   listUsers, getUser, createUser, updateUser, setPassword, countActiveAdmins, verifyPassword,
   login, sessionUser, setSessionRegion, logout,
-  getAllSettings, putSettings, listDocs, getDocBranch, putDoc, deleteDoc, importRegion, stats
+  getAllSettings, putSettings, listDocs, getDocBranch, putDoc, deleteDoc, importRegion, stats,
+  putFile, getFile
 };

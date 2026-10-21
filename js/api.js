@@ -93,6 +93,14 @@ const API = {
   /* ---- data ---- */
   getAllSettings() { return this._json('GET', '/settings'); },
   getDocs() { return this._json('GET', '/docs'); },
+  /** Uploads a signed copy for a saved document; the file is read into base64 first. */
+  async uploadFile(docId, file, kind = 'signed') {
+    const data = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onerror = reject; fr.onload = () => resolve(String(fr.result).split(',')[1]); fr.readAsDataURL(file); });
+    return this._json('POST', `/docs/${encodeURIComponent(docId)}/files`, { fileName: file.name, mimeType: file.type || 'application/octet-stream', data, kind });
+  },
+  fileUrl(id, download) { return `${this.base}/files/${encodeURIComponent(id)}${download ? '?download=1' : ''}`; },
+  /** Fetches a stored file as a blob URL (works even when the session is held as a header token). */
+  async fileBlobUrl(id) { const r = await this._fetch(this.fileUrl(id)); if (!r.ok) throw new Error('Could not load the file'); return URL.createObjectURL(await r.blob()); },
   importRegion(region, settings, docs) { return this._json('POST', '/import', { region, settings, docs }); },
 
   /* ---- queued writes: survive a server restart / network blip ---- */

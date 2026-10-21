@@ -135,6 +135,8 @@ function buildBlocksPremium(d, S) {
           <span>Prepared by</span><b>${esc(d.preparedBy)}</b>
           <span>Mobile</span><b>${esc(d.preparedMobile)}</b>
           ${isOrder && d.installDate ? `<span>Installation</span><b>${esc(fmtDate(d.installDate))}</b>` : ''}
+          ${isOrder && d.employee && d.employee !== d.preparedBy ? `<span>Handled by</span><b>${esc(d.employee)}</b>` : ''}
+          ${isOrder ? `<span>Status</span><b>${esc(d.status)}${d.status === 'Completed' && d.signedFile ? ' ✓' : ''}</b>` : ''}
           ${d.fromQuotation ? `<span>Quotation Ref.</span><b>${esc(d.fromQuotation)}</b>` : ''}
           ${d.fromOrder ? `<span>Order Ref.</span><b>${esc(d.fromOrder)}</b>` : ''}
         </div>

@@ -173,9 +173,35 @@ function typeDefaults(t) {
 const BRANCH_NAMES = { UAE: 'UAE (Dubai)', IN: 'India' };
 const STATUSES = {
   quotation: ['Draft', 'Sent', 'Accepted', 'Rejected'],
-  order: ['Confirmed', 'In Progress', 'Installed', 'Cancelled'],
+  order: ['Pending', 'Completed', 'Cancelled'],
   invoice: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled']
 };
+/** "just now", "2 hours ago", "yesterday", then the date. */
+function timeAgo(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = new Date(t), now = new Date();
+  const startOf = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(d)) / 864e5);
+  if (days === 1) return 'yesterday';
+  const local = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return local;
+}
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = d.getHours() % 12 || 12, ap = d.getHours() < 12 ? 'AM' : 'PM';
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}, ${hh}:${String(d.getMinutes()).padStart(2, '0')} ${ap}`;
+}
+
 const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'Cheque', 'Card', 'Online / UPI'];
 const CURRENCIES = {
   AED: { major: 'UAE Dirhams', minor: 'Fils', locale: 'en-US' },
