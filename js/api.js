@@ -85,6 +85,7 @@ const API = {
 
   /* ---- users (admin) ---- */
   contacts() { return this._json('GET', '/contacts'); },
+  employees() { return this._json('GET', '/employees'); },
   users() { return this._json('GET', '/users'); },
   createUser(u) { return this._json('POST', '/users', u); },
   updateUser(id, u) { return this._json('PUT', '/users/' + id, u); },

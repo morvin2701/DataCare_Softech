@@ -221,8 +221,7 @@ function formHTML(d) {
       <label class="f">Date<input type="date" data-f="date"></label>
     </div>
     <div class="hint" id="numHint"></div>
-    <div class="row one"><label class="f">Employee <span class="req">required</span><input data-f="employee" list="empList" placeholder="Who is preparing this document?" autocomplete="off"></label></div>
-    <datalist id="empList">${[...new Set([USER && USER.displayName, ...(teamContacts || []).map(c => c.name), ...docs.map(x => x.employee)].filter(Boolean))].map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+    <div class="row one"><label class="f">Employee <span class="req">required</span><select data-f="employee">${employeeOptions(d.employee)}</select></label></div>
     <div class="row">
       <label class="f">Currency<select data-f="currency">${Object.keys(CURRENCIES).map(c => opt(c, c, d.currency)).join('')}</select></label>
       <label class="f">Status<select data-f="status">${STATUSES[d.type].map(s => opt(s, s, d.status)).join('')}</select></label>
@@ -489,8 +488,9 @@ function onField(f, el) {
   } else if (f === 'status' && doc.type === 'order') {
     const prev = el.dataset.prev || doc.history.filter(h => h.status).slice(-1)[0]?.status || STATUSES.order[0];
     if (!readOnly && el.value !== prev) {
-      doc.status = prev;                       // keep the old value until the change is confirmed
-      changeOrderStatus(doc, el.value, prev);  // async: dialog, then applies + saves
+      const want = el.value;
+      doc.status = prev; el.value = prev;      // keep (and show) the old value until the change is confirmed
+      changeOrderStatus(doc, want, prev);      // async: dialog, then applies + saves
       return;
     }
   } else if (f === 'status') {
@@ -619,7 +619,7 @@ function addHistory(d, action, extra = {}) {
 }
 const employeeOk = d => !!String(d.employee || '').trim();
 function employeeMissing() {
-  toast('Enter the employee name (Document section) before saving.', true);
+  toast('Select the employee (Document section) before saving.', true);
   const el = $('[data-f="employee"]');
   if (el) { el.focus(); el.classList.add('field-missing'); setTimeout(() => el.classList.remove('field-missing'), 1600); }
 }
@@ -1125,7 +1125,7 @@ async function changeOrderStatus(d, next, prev) {
   const serverOk = API.online;
   signedFileCache = null;
   const fields = [
-    { name: 'employee', label: 'Employee name', value: d.employee || (USER && USER.displayName) || '', required: true, full: true, placeholder: 'Who is making this change?' },
+    { name: 'employee', label: 'Employee', type: 'select', value: d.employee || (USER && USER.displayName) || '', full: true, options: [['', '— select employee —'], ...employees.map(e => [e.name, e.name])] },
     ...(needsFile ? [{ name: 'signedFile', label: 'Signed order form (PDF or photo)', type: 'file', accept: '.pdf,image/*', required: true, full: true, hint: 'Required to mark the order Completed. Max 15 MB.' }] : []),
     { name: 'note', label: 'Note (optional)', type: 'text', full: true, placeholder: next === 'Cancelled' ? 'Reason for cancelling' : 'e.g. installed at the shop, trained 2 staff' }
   ];
@@ -1134,7 +1134,7 @@ async function changeOrderStatus(d, next, prev) {
     title: `${titles[next] || 'Change status'} – ${d.number || 'order'}`,
     fields, ok: next === 'Cancelled' ? 'Cancel order' : `Mark ${next}`,
     submit: async vals => {
-      if (!vals.employee.trim()) throw new Error('The employee name is required.');
+      if (!vals.employee.trim()) throw new Error('Select the employee making this change.');
       if (needsFile) {
         const f = $('#formDlgForm [name=signedFile]').files[0];
         if (!f) throw new Error('Upload the signed order form to complete the order.');
@@ -1247,6 +1247,20 @@ function numberingPreview(type) {
 
 /* ----- second number on the document header ----- */
 let teamContacts = null;   // [{ name, phone, region }] from the server; null = not loaded yet
+let employees = Store.get('dc_employees', []);   // [{ name, region }] – the team members, from the Team page
+
+async function loadEmployees() {
+  if (!API.online || !USER) return;
+  try { employees = await API.employees(); Store.set('dc_employees', employees); }
+  catch (e) { /* keep the cached list */ }
+}
+/** Dropdown options: own team first, then the other team. A name saved on an older document stays selectable. */
+function employeeOptions(selected) {
+  const mine = employees.filter(e => e.region === REGION), others = employees.filter(e => e.region !== REGION);
+  const group = (label, list) => list.length ? `<optgroup label="${esc(label)}">${list.map(e => opt(e.name, e.name, selected)).join('')}</optgroup>` : '';
+  const known = employees.some(e => e.name === selected);
+  return `<option value="">— select employee —</option>${REGION ? group(regionName(REGION) + ' team', mine) + group(regionName(REGION === 'IN' ? 'UAE' : 'IN') + ' team', others) : employees.map(e => opt(e.name, e.name, selected)).join('')}${selected && !known ? `<optgroup label="Previously entered">${opt(selected, selected, selected)}</optgroup>` : ''}`;
+}
 const digitsOf = p => String(p || '').replace(/\D/g, '');
 
 function contactCandidates() {
@@ -1943,6 +1957,7 @@ async function afterLogin(user) {
   API.info = await API.health().catch(() => API.info);
   setDbStatus(API._queue().length ? 'queued' : 'db');
   await loadFromServer();
+  await loadEmployees();
   renderUserChip();
 }
 
@@ -2099,7 +2114,7 @@ function bindTeam() {
       const fields = userFields({ region: add.dataset.adduser });
       fields.push({ name: 'password', label: 'Password', type: 'password', required: true, minlength: 6, hint: 'Team convention: their mobile number without the country code (e.g. 7016253749)', autocomplete: 'new-password' });
       const v = await formDialog({ title: 'Add team member', fields, ok: 'Add member', submit: vals => API.createUser(vals) });
-      if (v) { toast(`Added ${v.displayName}`); renderTeam(); }
+      if (v) { toast(`Added ${v.displayName}`); loadEmployees(); renderTeam(); }
       return;
     }
     const b = e.target.closest('[data-uact]');
@@ -2108,7 +2123,7 @@ function bindTeam() {
     if (!u) return;
     if (b.dataset.uact === 'edit') {
       const v = await formDialog({ title: `Edit ${u.displayName}`, fields: userFields(u), ok: 'Save changes', submit: vals => API.updateUser(u.id, { ...vals, active: u.active }) });
-      if (v) { toast('Member updated'); renderTeam(); }
+      if (v) { toast('Member updated'); loadEmployees(); renderTeam(); }
     } else if (b.dataset.uact === 'pw') {
       const v = await formDialog({ title: `New password for ${u.displayName}`, fields: [{ name: 'password', label: 'New password', type: 'password', required: true, minlength: 6, full: true, autocomplete: 'new-password' }], ok: 'Set password', submit: vals => API.resetPassword(u.id, vals.password) });
       if (v) toast(`Password set for ${u.displayName} – they are signed out everywhere`);
