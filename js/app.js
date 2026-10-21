@@ -572,7 +572,7 @@ function bindForm() {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.make) { makeNext(b.dataset.make); return; }
-    if (b.dataset.openFile) { openSignedFile(b.dataset.openFile); return; }
+    if (b.dataset.openFile) { openSignedFile(b.dataset.openFile, b.dataset.fileName || ''); return; }
     if (b.dataset.complete !== undefined) { changeOrderStatus(doc, 'Completed', doc.status); return; }
     if (b.dataset.compEdit !== undefined) { startDocCompEdit(); return; }
     if (b.dataset.compReset !== undefined) { resetDocComp(); return; }
@@ -1126,7 +1126,7 @@ async function changeOrderStatus(d, next, prev) {
   signedFileCache = null;
   const fields = [
     { name: 'employee', label: 'Employee', type: 'select', value: d.employee || (USER && USER.displayName) || '', full: true, options: [['', '— select employee —'], ...employees.map(e => [e.name, e.name])] },
-    ...(needsFile ? [{ name: 'signedFile', label: 'Signed order form (PDF or photo)', type: 'file', accept: '.pdf,image/*', required: true, full: true, hint: 'Required to mark the order Completed. Max 15 MB.' }] : []),
+    ...(needsFile ? [{ name: 'signedFile', label: 'Signed order form (PDF or photo)', type: 'file', accept: '.pdf,image/*,.heic,.heif', required: true, full: true, hint: 'Required to mark the order Completed. Max 15 MB.' }] : []),
     { name: 'note', label: 'Note (optional)', type: 'text', full: true, placeholder: next === 'Cancelled' ? 'Reason for cancelling' : 'e.g. installed at the shop, trained 2 staff' }
   ];
   const titles = { Completed: 'Mark order as Completed', Cancelled: 'Cancel this order', Pending: 'Move order back to Pending' };
@@ -1138,7 +1138,7 @@ async function changeOrderStatus(d, next, prev) {
       if (needsFile) {
         const f = $('#formDlgForm [name=signedFile]').files[0];
         if (!f) throw new Error('Upload the signed order form to complete the order.');
-        if (!/^(application\/pdf|image\/)/.test(f.type)) throw new Error('Only a PDF or an image (JPG, PNG, HEIC) can be uploaded.');
+        if (!uploadType(f)) throw new Error('Only a PDF or an image (JPG, PNG, HEIC) can be uploaded.');
         if (f.size > 15 * 1024 * 1024) throw new Error('The file is larger than 15 MB.');
         if (!serverOk) throw new Error('The signed copy is stored in the database – connect to the server to complete orders.');
         if (!isSaved(d) || (inEditor && dirty)) { if (!saveDoc(true)) throw new Error('Could not save the order first.'); }
@@ -1165,9 +1165,15 @@ async function changeOrderStatus(d, next, prev) {
   return true;
 }
 
-async function openSignedFile(fileId) {
-  try { const url = await API.fileBlobUrl(fileId); window.open(url, '_blank'); }
-  catch (e) { toast('Could not open the signed copy: ' + e.message, true); }
+/** Opens a signed copy in a new tab. HEIC photos cannot be shown by browsers, so those are downloaded instead. */
+async function openSignedFile(fileId, name = '') {
+  try {
+    const url = await API.fileBlobUrl(fileId);
+    if (/\.(heic|heif)$/i.test(name)) {
+      const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+      toast('HEIC photo downloaded – open it in Photos or Preview.');
+    } else window.open(url, '_blank');
+  } catch (e) { toast('Could not open the signed copy: ' + e.message, true); }
 }
 
 /* ----- activity panel in the editor ----- */
@@ -1182,7 +1188,7 @@ function historyHTML(d) {
         <b>${sf ? 'Signed copy on file' : 'No signed copy yet'}</b>
         <small>${sf ? `${esc(sf.name)} · ${(sf.size / 1024).toFixed(0)} KB · uploaded by ${esc(sf.by || '')} <span class="ago" data-at="${esc(sf.at)}" title="${esc(fmtDateTime(sf.at))}">${esc(timeAgo(sf.at))}</span>` : 'Upload the customer-signed order form when the order is completed.'}</small>
       </div>
-      ${sf ? `<button type="button" class="btn sm" data-open-file="${esc(sf.id)}">View</button>` : (readOnly ? '' : `<button type="button" class="btn sm primary" data-complete>Mark Completed</button>`)}
+      ${sf ? `<button type="button" class="btn sm" data-open-file="${esc(sf.id)}" data-file-name="${esc(sf.name || '')}">${/\.(heic|heif)$/i.test(sf.name || '') ? 'Download' : 'View'}</button>` : (readOnly ? '' : `<button type="button" class="btn sm primary" data-complete>Mark Completed</button>`)}
     </div>` : ''}
     <div class="hist">
       ${items.length ? items.map(h => `<div class="hist-item ${esc(h.action)}">

@@ -203,13 +203,22 @@ app.delete('/api/docs/:id', requireUser, wrap(async (req, res) => {
 }));
 
 /* ---------- signed copies: upload (JSON with base64) and download ---------- */
-const FILE_TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' };
+const FILE_TYPES = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif' };
+const EXT_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
+/** Phones (iPhone HEIC especially) often report no type or a generic one: fall back to the file extension. */
+function resolveMime(mimeType, fileName) {
+  const m = String(mimeType || '').toLowerCase().split(';')[0].trim();
+  if (FILE_TYPES[m]) return m;
+  const ext = String(fileName || '').toLowerCase().split('.').pop();
+  return EXT_TYPES[ext] || null;
+}
 app.post('/api/docs/:id/files', requireUser, wrap(async (req, res) => {
   const current = await db.getDocBranch(req.params.id);
   if (!current) throw fail(404, 'Save the document before uploading a signed copy.');
   if (!canWriteRegion(req.user, current)) throw fail(403, 'This document belongs to the other team.');
-  const { fileName, mimeType, data, kind } = req.body || {};
-  if (!FILE_TYPES[mimeType]) throw fail(400, 'Only PDF, JPG, PNG, WEBP or HEIC files can be uploaded.');
+  const { fileName, data, kind } = req.body || {};
+  const mimeType = resolveMime(req.body && req.body.mimeType, fileName);
+  if (!mimeType) throw fail(400, 'Only PDF, JPG, PNG, WEBP or HEIC files can be uploaded.');
   const content = Buffer.from(String(data || ''), 'base64');
   if (!content.length) throw fail(400, 'The file is empty.');
   if (content.length > 15 * 1024 * 1024) throw fail(400, 'The file is larger than 15 MB.');

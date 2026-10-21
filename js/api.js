@@ -96,8 +96,9 @@ const API = {
   getDocs() { return this._json('GET', '/docs'); },
   /** Uploads a signed copy for a saved document; the file is read into base64 first. */
   async uploadFile(docId, file, kind = 'signed') {
-    const data = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onerror = reject; fr.onload = () => resolve(String(fr.result).split(',')[1]); fr.readAsDataURL(file); });
-    return this._json('POST', `/docs/${encodeURIComponent(docId)}/files`, { fileName: file.name, mimeType: file.type || 'application/octet-stream', data, kind });
+    const prepared = await prepareUpload(file);
+    const data = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onerror = reject; fr.onload = () => resolve(String(fr.result).split(',')[1]); fr.readAsDataURL(prepared.blob); });
+    return this._json('POST', `/docs/${encodeURIComponent(docId)}/files`, { fileName: prepared.name, mimeType: prepared.type, data, kind });
   },
   fileUrl(id, download) { return `${this.base}/files/${encodeURIComponent(id)}${download ? '?download=1' : ''}`; },
   /** Fetches a stored file as a blob URL (works even when the session is held as a header token). */
@@ -165,3 +166,29 @@ const API = {
     return Promise.resolve(null);
   }
 };
+
+/* ---------- upload helpers ---------- */
+const UPLOAD_TYPES = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' };
+
+/** The real type of a picked file: the browser's type when it is a known one, else from the extension (iPhone HEIC often reports none). */
+function uploadType(file) {
+  const t = String(file.type || '').toLowerCase();
+  if (Object.values(UPLOAD_TYPES).includes(t)) return t;
+  return UPLOAD_TYPES[String(file.name || '').toLowerCase().split('.').pop()] || null;
+}
+
+/** HEIC cannot be shown in a browser. Where the device can decode it (iPhone/iPad, recent Macs), it is converted to JPEG
+    before upload so it opens everywhere later; otherwise the HEIC is kept as it is. */
+async function prepareUpload(file) {
+  const type = uploadType(file) || 'application/octet-stream';
+  if (type !== 'image/heic' && type !== 'image/heif') return { blob: file, name: file.name, type };
+  try {
+    const bmp = await createImageBitmap(file);
+    const max = 2200, scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+    if (blob) return { blob, name: file.name.replace(/\.(heic|heif)$/i, '') + '.jpg', type: 'image/jpeg' };
+  } catch (e) { /* this device cannot decode HEIC: keep the original */ }
+  return { blob: file, name: file.name, type };
+}
