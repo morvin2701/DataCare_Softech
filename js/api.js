@@ -54,8 +54,8 @@ const API = {
     if (token) Store.set('dc_token', token); else { try { localStorage.removeItem('dc_token'); } catch (e) { /* ignore */ } }
   },
 
-  async _json(method, path, body) {
-    const r = await this._fetch(this.base + path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  async _json(method, path, body, timeout) {
+    const r = await this._fetch(this.base + path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, timeout);
     if (!r.ok) {
       const err = new Error(`HTTP ${r.status}`);
       err.status = r.status;
@@ -98,7 +98,8 @@ const API = {
   async uploadFile(docId, file, kind = 'signed') {
     const prepared = await prepareUpload(file);
     const data = await new Promise((resolve, reject) => { const fr = new FileReader(); fr.onerror = reject; fr.onload = () => resolve(String(fr.result).split(',')[1]); fr.readAsDataURL(prepared.blob); });
-    return this._json('POST', `/docs/${encodeURIComponent(docId)}/files`, { fileName: prepared.name, mimeType: prepared.type, data, kind });
+    const timeout = 60000 + Math.ceil(prepared.blob.size / (100 * 1024)) * 1000;
+    return this._json('POST', `/docs/${encodeURIComponent(docId)}/files`, { fileName: prepared.name, mimeType: prepared.type, data, kind }, timeout);
   },
   fileUrl(id, download) { return `${this.base}/files/${encodeURIComponent(id)}${download ? '?download=1' : ''}`; },
   /** Fetches a stored file as a blob URL (works even when the session is held as a header token). */
@@ -177,18 +178,22 @@ function uploadType(file) {
   return UPLOAD_TYPES[String(file.name || '').toLowerCase().split('.').pop()] || null;
 }
 
-/** HEIC cannot be shown in a browser. Where the device can decode it (iPhone/iPad, recent Macs), it is converted to JPEG
-    before upload so it opens everywhere later; otherwise the HEIC is kept as it is. */
+/** Photos are shrunk before upload: a signed form photographed by a phone is 3-8 MB, which is slow and can fail on the
+    link to the server, while a 1600px JPEG (200-400 KB) is just as legible. HEIC is converted to JPEG at the same time
+    so it opens in any browser later. PDFs are sent as they are. If the device cannot decode the image, the original is kept. */
 async function prepareUpload(file) {
   const type = uploadType(file) || 'application/octet-stream';
-  if (type !== 'image/heic' && type !== 'image/heif') return { blob: file, name: file.name, type };
+  if (!/^image\//.test(type)) return { blob: file, name: file.name, type };
+  const isHeic = type === 'image/heic' || type === 'image/heif';
+  const smallEnough = !isHeic && file.size <= 600 * 1024;
+  if (smallEnough) return { blob: file, name: file.name, type };
   try {
     const bmp = await createImageBitmap(file);
-    const max = 2200, scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const max = 1600, scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
     const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
-    if (blob) return { blob, name: file.name.replace(/\.(heic|heif)$/i, '') + '.jpg', type: 'image/jpeg' };
-  } catch (e) { /* this device cannot decode HEIC: keep the original */ }
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+    if (blob && (isHeic || blob.size < file.size)) return { blob, name: file.name.replace(/\.[^.]+$/, '') + '.jpg', type: 'image/jpeg' };
+  } catch (e) { /* cannot decode on this device: keep the original */ }
   return { blob: file, name: file.name, type };
 }

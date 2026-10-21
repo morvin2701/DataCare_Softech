@@ -1141,11 +1141,18 @@ async function changeOrderStatus(d, next, prev) {
         if (!uploadType(f)) throw new Error('Only a PDF or an image (JPG, PNG, HEIC) can be uploaded.');
         if (f.size > 15 * 1024 * 1024) throw new Error('The file is larger than 15 MB.');
         if (!serverOk) throw new Error('The signed copy is stored in the database – connect to the server to complete orders.');
-        if (!isSaved(d) || (inEditor && dirty)) { if (!saveDoc(true)) throw new Error('Could not save the order first.'); }
-        // the save travels to the database in the background: wait for it, so the upload finds the order there
-        const sent = await Promise.race([remotePutDoc(d), new Promise(r => setTimeout(() => r('timeout'), 20000))]);
-        if (!sent || sent === 'timeout') throw new Error('The order could not be saved to the database. Check the connection and try again.');
-        const up = await API.uploadFile(d.id, f, 'signed');
+        const okBtn = $('#formDlgOk'), okLabel = okBtn.textContent;
+        const step = t => { okBtn.textContent = t; };
+        try {
+          if (!isSaved(d) || (inEditor && dirty)) { if (!saveDoc(true)) throw new Error('Could not save the order first.'); }
+          // the save travels to the database in the background: wait for it, so the upload finds the order there
+          step('Saving order…');
+          const sent = await Promise.race([remotePutDoc(d), new Promise(r => setTimeout(() => r('timeout'), 20000))]);
+          if (!sent || sent === 'timeout') throw new Error('The order could not be saved to the database. Check the connection and try again.');
+          step(`Uploading ${(f.size / 1024 / 1024).toFixed(1)} MB…`);
+          try { var up = await API.uploadFile(d.id, f, 'signed'); }
+          catch (e) { throw new Error(/abort/i.test(e.message) ? 'The upload took too long and was stopped. Check the internet connection and try again.' : e.message); }
+        } finally { okBtn.textContent = okLabel; }
         d.signedFile = { id: up.id, name: f.name, size: f.size, type: f.type, at: new Date().toISOString(), by: vals.employee.trim() };
       }
     }
