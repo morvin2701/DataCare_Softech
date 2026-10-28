@@ -86,7 +86,7 @@ const API = {
   /* ---- users (admin) ---- */
   contacts() { return this._json('GET', '/contacts'); },
   employees() { return this._json('GET', '/employees'); },
-  regions() { return this._json('GET', '/regions'); },
+  regions() { const t = new URLSearchParams(location.search).get('team'); return this._json('GET', '/regions' + (t ? '?team=' + encodeURIComponent(t) : '')); },
   createRegion(r) { return this._json('POST', '/regions', r); },
   users() { return this._json('GET', '/users'); },
   createUser(u) { return this._json('POST', '/users', u); },

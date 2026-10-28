@@ -89,9 +89,15 @@ function noteFail(ip) {
 /* ---------- regions (teams) ---------- */
 // the login screen needs the names and dial codes before anyone is signed in
 app.get('/api/regions', wrap(async (req, res) => {
+  if (!req.user) await db.refreshRegions();   // signed-out lookups read the table, so a just-created team resolves at once
   const rows = db.regionRows();
-  // signed in: only the caller's group; signed out: all, so the right team can be picked at login
-  res.json(req.user ? rows.filter(r => r.group === groupOf(req.user)) : rows.map(r => ({ ...r, group: undefined })));
+  if (req.user) return res.json(rows.filter(r => r.group === groupOf(req.user)));
+  // signed out (login screen): one group only, never the whole list – a team must not learn that other teams exist.
+  // The group is chosen by the ?team=<code> in the login link; without it, the original group.
+  const hint = String(req.query.team || '').toUpperCase();
+  const hinted = rows.find(r => r.code === hint);
+  const group = hinted ? hinted.group : 'A';
+  res.json(rows.filter(r => r.group === group).map(r => ({ ...r, group: undefined })));
 }));
 app.post('/api/regions', requireUser, requireAdmin, wrap(async (req, res) => {
   try { res.json(await db.createRegion(req.body || {})); }
@@ -111,7 +117,16 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const { username, password, region } = req.body || {};
   const r = await db.login(username, password, db.REGIONS.includes(region) ? region : null);
   if (!r) { noteFail(ip); return res.status(401).json({ error: 'Incorrect username or password.' }); }
-  if (r.wrongRegion) { const t = db.regionRows().find(x => x.code === r.wrongRegion); return res.status(403).json({ error: `This account belongs to the ${t ? t.name : r.wrongRegion} team. Select that team to sign in.`, region: r.wrongRegion }); }
+  if (r.wrongRegion) {
+    const t = db.regionRows().find(x => x.code === r.wrongRegion);
+    const hint = String((req.body || {}).region || '');
+    const sameGroup = t && db.regionGroup(hint) === t.group;
+    const label = t ? (/team/i.test(t.name) ? t.name : `${t.name} team`) : r.wrongRegion;
+    // a team in another group is never named here: that would reveal it exists
+    return res.status(403).json(sameGroup
+      ? { error: `This account belongs to ${label}. Select that team to sign in.`, region: r.wrongRegion }
+      : { error: 'This account is not part of the teams on this sign-in page. Use the sign-in link your administrator gave you.' });
+  }
   loginFails.delete(ip);
   setCookie(res, r.token);
   res.json({ ...r.user, token: r.token });

@@ -431,5 +431,5 @@ module.exports = {
   login, sessionUser, setSessionRegion, logout,
   getAllSettings, putSettings, listDocs, getDocBranch, putDoc, deleteDoc, importRegion, stats,
   putFile, getFile,
-  regionRows: () => REGION_ROWS, regionGroup, regionsInGroup, createRegion
+  regionRows: () => REGION_ROWS, regionGroup, regionsInGroup, createRegion, refreshRegions
 };

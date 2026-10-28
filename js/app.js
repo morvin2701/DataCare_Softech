@@ -1931,9 +1931,14 @@ function updateLoginPrefix() {
 }
 /** Builds the team selector on the login screen from the region list. */
 function renderLoginRegions() {
-  const last = Store.get('dc_last_region') || regionCodes()[0];
+  const hint = String(new URLSearchParams(location.search).get('team') || '').toUpperCase();
+  const remembered = Store.get('dc_last_region');
+  const last = regionCodes().includes(hint) ? hint : regionCodes().includes(remembered) ? remembered : regionCodes()[0];
   $('.login-seg').innerHTML = regionCodes().map(c => `<button type="button" data-v="${c}" class="${c === last ? 'on' : ''}"><span class="flag">${regionInfo(c).flag || ''}</span> ${esc(regionLong(c))}</button>`).join('');
   $('.login-seg').classList.toggle('many', regionCodes().length > 2);
+  $('.login-seg').classList.toggle('single', regionCodes().length === 1);
+  const sub = $('.login-sub');
+  if (sub) sub.textContent = regionCodes().length === 1 ? `Signing in to ${regionLong(regionCodes()[0])}.` : 'Choose your team, then enter your username and password.';
 }
 
 function bindLogin() {
@@ -2107,7 +2112,8 @@ async function renderTeam() {
       </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet – add the ${regionName(region)} team.</td></tr>`;
   const section = region => `
     <div class="card list-card" style="margin-bottom:18px">
-      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(regionLong(region))} team <span>${teamUsers.filter(u => u.region === region).length}</span></button></div>
+      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(regionLong(region))} team <span>${teamUsers.filter(u => u.region === region).length}</span></button>
+        <button type="button" class="btn link sm" data-copy-login="${esc(region)}" title="Copy this team's sign-in link">Copy login link</button></div>
         <button class="btn sm" data-adduser="${region}">+ Add member</button></div>
       <div class="table-wrap"><table class="list team-list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
       <tbody>${rows(region)}</tbody></table></div>
@@ -2138,7 +2144,15 @@ async function addRegionDialog() {
       await API.createRegion({ code, name: vals.name.trim(), group, country: vals.country, ...base });
     }
   });
-  if (v) { toast(`Team “${v.name}” created. Switch to it with the team switcher to add its members.`); const rs = await API.regions().catch(() => null); if (rs) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); renderUserChip(); renderTeam(); }
+  if (v) {
+    const code = v.code.trim().toUpperCase();
+    // the new team is in its own group, so it is not in this group's list: add it to the switcher directly
+    if (!regionCodes().includes(code)) REGION_LIST.push({ code, name: v.name.trim(), country: v.country, dial: v.country === 'UAE' ? '+971' : '+91', currency: v.country === 'UAE' ? 'AED' : 'INR', taxLabel: v.country === 'UAE' ? 'VAT' : 'GST', taxRate: v.country === 'UAE' ? 5 : 18, flag: FLAG_BY_COUNTRY[v.country] || '' });
+    renderUserChip();
+    await ask({ title: `Team “${v.name.trim()}” created`, message: `Their login link is:\n${location.origin}${location.pathname}?team=${code}\n\nOnly this link shows their team on the sign-in screen; the normal address shows only ${regionCodes().filter(c => c !== code).map(regionName).join(' and ')}. Switch to ${code} in the top bar to add its members.`, ok: 'Copy link', cancel: 'Close' })
+      .then(copy => { if (copy) navigator.clipboard && navigator.clipboard.writeText(`${location.origin}${location.pathname}?team=${code}`).then(() => toast('Login link copied')); });
+    renderTeam();
+  }
 }
 
 function userFields(u = {}) {
@@ -2154,6 +2168,8 @@ function userFields(u = {}) {
 function bindTeam() {
   $('#teamPanel').addEventListener('click', async e => {
     if (e.target.closest('#addRegionBtn')) { addRegionDialog(); return; }
+    const cl = e.target.closest('[data-copy-login]');
+    if (cl) { const link = `${location.origin}${location.pathname}?team=${cl.dataset.copyLogin}`; (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => toast('Login link copied: ' + link), () => prompt('Login link', link)); return; }
     const add = e.target.closest('[data-adduser]');
     if (add) {
       const fields = userFields({ region: add.dataset.adduser });

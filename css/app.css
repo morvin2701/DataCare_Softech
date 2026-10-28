@@ -806,3 +806,7 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .login-seg.many { display: flex; flex-direction: column; }
 .login-seg.many button { white-space: nowrap; }
 .login-seg.many button + button { border-left: 0; border-top: 1px solid var(--border); }
+/* a team that signs in alone needs no selector */
+.login-seg.single { display: none; }
+/* dialog messages may contain a link on its own line */
+.dlg p { white-space: pre-line; overflow-wrap: anywhere; }
