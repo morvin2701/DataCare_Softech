@@ -6,7 +6,18 @@ const sql = require('mssql');
 
 const env = process.env;
 const DB_NAME = (env.DB_NAME || 'DcInvoice').replace(/[^\w]/g, '');
-const REGIONS = ['UAE', 'IN'];
+/* Regions (teams) are rows in dbo.Regions. Each belongs to a visibility group: a user sees only the regions in
+   their own group. UAE and IN share group 'A' (one business, two offices); a separately run team gets its own group. */
+let REGIONS = ['UAE', 'IN'];                 // codes, refreshed from the table at start-up and whenever a region is added
+let REGION_ROWS = [];                        // [{ code, name, group, country, dial, currency, taxLabel, taxRate, sortOrder }]
+const regionGroup = code => (REGION_ROWS.find(r => r.code === code) || {}).group || 'A';
+const regionsInGroup = group => REGION_ROWS.filter(r => r.group === group).map(r => r.code);
+async function refreshRegions() {
+  const r = await pool.request().query('SELECT Code, Name, GroupCode, Country, Dial, Currency, TaxLabel, TaxRate, SortOrder FROM dbo.Regions WHERE Active = 1 ORDER BY SortOrder, Code');
+  REGION_ROWS = r.recordset.map(x => ({ code: x.Code, name: x.Name, group: x.GroupCode, country: x.Country, dial: x.Dial, currency: x.Currency, taxLabel: x.TaxLabel, taxRate: Number(x.TaxRate), sortOrder: x.SortOrder }));
+  REGIONS = REGION_ROWS.map(x => x.code);
+  module.exports.REGIONS = REGIONS;
+}
 
 function baseConfig(database) {
   return {
@@ -120,6 +131,25 @@ async function init() {
     IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Users_Username')
     CREATE UNIQUE INDEX UX_Users_Username ON dbo.Users (Username);
 
+    IF OBJECT_ID('dbo.Regions', 'U') IS NULL
+    BEGIN
+      CREATE TABLE dbo.Regions (
+        Code      NVARCHAR(8)   NOT NULL CONSTRAINT PK_Regions PRIMARY KEY,
+        Name      NVARCHAR(60)  NOT NULL,
+        GroupCode NVARCHAR(8)   NOT NULL,     -- visibility group
+        Country   NVARCHAR(40)  NOT NULL,
+        Dial      NVARCHAR(8)   NOT NULL,     -- login password prefix, e.g. +91
+        Currency  NVARCHAR(5)   NOT NULL,
+        TaxLabel  NVARCHAR(10)  NOT NULL,
+        TaxRate   DECIMAL(5,2)  NOT NULL,
+        SortOrder INT           NOT NULL CONSTRAINT DF_Regions_Sort DEFAULT 0,
+        Active    BIT           NOT NULL CONSTRAINT DF_Regions_Active DEFAULT 1
+      );
+      INSERT INTO dbo.Regions (Code, Name, GroupCode, Country, Dial, Currency, TaxLabel, TaxRate, SortOrder) VALUES
+        ('UAE', 'UAE · Dubai', 'A', 'UAE',   '+971', 'AED', 'VAT', 5,  1),
+        ('IN',  'India',       'A', 'India', '+91',  'INR', 'GST', 18, 2);
+    END
+
     IF OBJECT_ID('dbo.Sessions', 'U') IS NULL
     CREATE TABLE dbo.Sessions (
       Token     NVARCHAR(80) NOT NULL CONSTRAINT PK_Sessions PRIMARY KEY,
@@ -129,6 +159,8 @@ async function init() {
       ExpiresAt DATETIME2    NOT NULL
     );
   `);
+
+  await refreshRegions();
 
   // first run: create the administrator account
   const users = await pool.request().query('SELECT COUNT(*) AS n FROM dbo.Users');
@@ -146,15 +178,39 @@ async function init() {
 const DUPLICATE_ERRORS = new Set([2601, 2627]);
 const isDuplicate = err => DUPLICATE_ERRORS.has(err && err.number);
 
+/* ---------- regions ---------- */
+function validRegion(r) {
+  const errors = [];
+  if (!/^[A-Z0-9]{2,8}$/.test(r.code || '')) errors.push('Code: 2–8 capital letters or digits, e.g. IN2.');
+  if (!(r.name || '').trim()) errors.push('Name is required.');
+  if (!/^[A-Z0-9]{1,8}$/.test(r.group || '')) errors.push('Group: 1–8 capital letters or digits, e.g. B.');
+  if (!/^\+\d{1,4}$/.test(r.dial || '')) errors.push('Dial code must look like +91.');
+  if (!/^[A-Z]{3}$/.test(r.currency || '')) errors.push('Currency must be a 3-letter code, e.g. INR.');
+  if (!(r.taxLabel || '').trim()) errors.push('Tax label is required (e.g. GST).');
+  if (!(Number(r.taxRate) >= 0)) errors.push('Tax rate must be a number.');
+  return errors;
+}
+async function createRegion(r) {
+  const errors = validRegion(r);
+  if (errors.length) { const e = new Error(errors.join(' ')); e.status = 400; throw e; }
+  await pool.request()
+    .input('code', sql.NVarChar(8), r.code).input('name', sql.NVarChar(60), r.name.trim()).input('group', sql.NVarChar(8), r.group)
+    .input('country', sql.NVarChar(40), (r.country || r.name).trim()).input('dial', sql.NVarChar(8), r.dial).input('cur', sql.NVarChar(5), r.currency)
+    .input('tl', sql.NVarChar(10), r.taxLabel.trim()).input('tr', sql.Decimal(5, 2), Number(r.taxRate)).input('so', sql.Int, REGION_ROWS.length + 1)
+    .query('INSERT INTO dbo.Regions (Code, Name, GroupCode, Country, Dial, Currency, TaxLabel, TaxRate, SortOrder) VALUES (@code, @name, @group, @country, @dial, @cur, @tl, @tr, @so)');
+  await refreshRegions();
+  return REGION_ROWS.find(x => x.code === r.code);
+}
+
 /* ---------- users & sessions ---------- */
 const publicUser = u => u && ({
   id: u.Id, username: u.Username, displayName: u.DisplayName, phone: u.Phone || '',
-  region: u.Region, role: u.Role, active: !!u.Active, lastLoginAt: u.LastLoginAt, createdAt: u.CreatedAt
+  region: u.Region, group: regionGroup(u.Region), role: u.Role, active: !!u.Active, lastLoginAt: u.LastLoginAt, createdAt: u.CreatedAt
 });
 
-async function listUsers() {
+async function listUsers(group) {
   const r = await pool.request().query('SELECT * FROM dbo.Users ORDER BY Region, DisplayName');
-  return r.recordset.map(publicUser);
+  return r.recordset.map(publicUser).filter(u => !group || u.group === group);
 }
 
 async function getUser(id) {
@@ -166,7 +222,7 @@ function validUser(u, { requirePassword }) {
   const errors = [];
   if (!/^[a-z0-9._-]{3,60}$/i.test(u.username || '')) errors.push('Username: 3–60 letters, numbers, dots, dashes or underscores.');
   if (!(u.displayName || '').trim()) errors.push('Name is required.');
-  if (!REGIONS.includes(u.region)) errors.push('Team must be UAE or IN.');
+  if (!REGIONS.includes(u.region)) errors.push(`Team must be one of: ${REGIONS.join(', ')}.`);
   if (!['admin', 'user'].includes(u.role)) errors.push('Role must be admin or user.');
   if (requirePassword && String(u.password || '').length < 6) errors.push('Password must be at least 6 characters.');
   return errors;
@@ -255,10 +311,10 @@ async function logout(token) {
 }
 
 /* ---------- settings ---------- */
-async function getAllSettings() {
+async function getAllSettings(group) {
   const r = await pool.request().query('SELECT Region, Data FROM dbo.RegionSettings');
   const out = {};
-  for (const row of r.recordset) out[row.Region] = JSON.parse(row.Data);
+  for (const row of r.recordset) if (!group || regionGroup(row.Region) === group) out[row.Region] = JSON.parse(row.Data);
   return out;
 }
 
@@ -272,9 +328,10 @@ async function putSettings(region, data, by, request = pool.request()) {
 }
 
 /* ---------- documents ---------- */
-async function listDocs() {
-  const r = await pool.request().query('SELECT Data FROM dbo.Documents ORDER BY UpdatedAt DESC');
-  return r.recordset.map(row => JSON.parse(row.Data));
+async function listDocs(group) {
+  const codes = group ? regionsInGroup(group) : null;
+  const r = await pool.request().query('SELECT Branch, Data FROM dbo.Documents ORDER BY UpdatedAt DESC');
+  return r.recordset.filter(row => !codes || codes.includes(row.Branch)).map(row => JSON.parse(row.Data));
 }
 
 async function getDocBranch(id) {
@@ -373,5 +430,6 @@ module.exports = {
   listUsers, getUser, createUser, updateUser, setPassword, countActiveAdmins, verifyPassword,
   login, sessionUser, setSessionRegion, logout,
   getAllSettings, putSettings, listDocs, getDocBranch, putDoc, deleteDoc, importRegion, stats,
-  putFile, getFile
+  putFile, getFile,
+  regionRows: () => REGION_ROWS, regionGroup, regionsInGroup, createRegion
 };

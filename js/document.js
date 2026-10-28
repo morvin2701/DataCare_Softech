@@ -44,12 +44,15 @@ function phoneRegion(phone) {
     The second number's label follows its country code, so two UAE numbers both read "UAE". */
 function headerContacts(d, S) {
   const own = S.branches[d.branch];
-  const otherBr = d.branch === 'UAE' ? 'IN' : 'UAE';
-  const phone2 = (S.headerContact2 && S.headerContact2.phone) || S.branches[otherBr].phone;
+  const codes = typeof regionCodes === 'function' ? regionCodes() : ['UAE', 'IN'];
+  const i = codes.indexOf(d.branch);
+  const otherBr = codes.length > 1 ? codes[(i + 1) % codes.length] : d.branch;
+  const otherB = S.branches[otherBr] || own;
+  const phone2 = (S.headerContact2 && S.headerContact2.phone) || otherB.phone || '';
   const r2 = phoneRegion(phone2);
   return [
     { label: own.label, phone: own.phone },
-    { label: r2 ? S.branches[r2].label : S.branches[otherBr].label, phone: phone2 }
+    { label: r2 && S.branches[r2] ? S.branches[r2].label : otherB.label, phone: phone2 }
   ];
 }
 

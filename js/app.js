@@ -17,7 +17,8 @@ const isAdmin = () => !!USER && USER.role === 'admin';
 const SB = br => (ALL_S && ALL_S[br]) || S;                            // settings that apply to a branch
 const canEdit = d => !REGION || isAdmin() || d.branch === REGION;
 const canWriteRegion = r => !REGION || isAdmin() || USER.homeRegion === r;
-const regionName = r => (r === 'IN' ? 'India' : 'UAE');
+const regionName = r => regionInfo(r).name.split('·')[0].trim();   // 'UAE', 'India', 'India 2' …
+const regionLong = r => regionInfo(r).name;
 function setS(next) { S = next; if (ALL_S && REGION) ALL_S[REGION] = S; }
 
 /* ---------------- persistence ---------------- */
@@ -79,10 +80,12 @@ async function loadFromServer() {
     const localDocs = docs;
     const legacyLocal = Store.get('dc_settings');   // settings saved before sign-in existed
     ALL_S = {};
-    for (const r of ['UAE', 'IN']) {
+    for (const r of regionCodes()) {
       const cached = Store.get('dc_settings_' + r);
       ALL_S[r] = mergeDefaults(DEFAULT_SETTINGS, remote[r] || cached || (r === REGION ? legacyLocal : null));
       ALL_S[r].lastBranch = r;
+      // every team must have branch details for every visible team (header second number, phone lookups)
+      for (const c of regionCodes()) if (!ALL_S[r].branches[c]) ALL_S[r].branches[c] = branchDefaults(c);
       if (!remote[r] && canWriteRegion(r)) API.putSettings(r, clone(ALL_S[r])).catch(() => {});
       Store.set('dc_settings_' + r, ALL_S[r]);
     }
@@ -131,7 +134,7 @@ function newDoc(type, branch) {
   const d = {
     id: uid(), type, branch, number: '', autoNumber: true, numberAssigned: false,
     date: todayISO(), currency: b.currency, status: STATUSES[type][0],
-    customer: { company: '', contact: '', address: '', city: '', country: branch === 'IN' ? 'India' : 'UAE', mobile: '', email: '', taxId: '' },
+    customer: { company: '', contact: '', address: '', city: '', country: regionInfo(branch).country, mobile: '', email: '', taxId: '' },
     customerType: 'new',
     softwareVersion: S.softwareVersions[0] || 'DataCare Next',
     edition: '', showEditions: true, showComparison: false, compHideCols: [], compHideRows: [],
@@ -214,7 +217,7 @@ function formHTML(d) {
     <div class="row one">
       <div class="branch-line"><div class="hint">Issuing branch</div>${REGION
         ? `<div class="branch-fixed"><span class="chip">${regionName(d.branch)}</span>${d.branch !== REGION ? '<small class="muted">other team</small>' : ''}</div>`
-        : `<div class="seg" data-seg="branch"><button type="button" data-v="UAE">UAE</button><button type="button" data-v="IN">India</button></div>`}</div>
+        : `<div class="seg" data-seg="branch">${regionCodes().map(c => `<button type="button" data-v="${c}">${esc(regionName(c))}</button>`).join('')}</div>`}</div>
     </div>
     <div class="row">
       <label class="f">${kindOf(d.type).title} No.<input data-f="number" placeholder="Auto"></label>
@@ -531,7 +534,7 @@ function setBranch(br) {
   }
   if (doc.taxLabel === ob.taxLabel && Number(doc.taxRate) === Number(ob.taxRate)) { doc.taxLabel = nb.taxLabel; doc.taxRate = nb.taxRate; }
   if (doc.preparedMobile === ob.phone) doc.preparedMobile = nb.phone;
-  const defCountry = b => (b === 'IN' ? 'India' : 'UAE');
+  const defCountry = b => regionInfo(b).country;
   if (!doc.customer.country || doc.customer.country === defCountry(doc.branch)) doc.customer.country = defCountry(br);
   doc.branch = br;
   S.lastBranch = br; saveSettings();
@@ -843,7 +846,7 @@ function renderRegionTabs() {
   const el = $('#regionTabs');
   const n = r => docs.filter(d => !r || d.branch === r).length;
   const tab = (r, label) => `<button type="button" data-region="${r}" class="${docsView.region === r ? 'on' : ''}">${label} <span>${n(r)}</span></button>`;
-  el.innerHTML = (REGION ? '' : tab('', 'All')) + tab('UAE', '🇦🇪 UAE · Dubai') + tab('IN', '🇮🇳 India');
+  el.innerHTML = (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, `${regionInfo(c).flag || ''} ${esc(regionLong(c))}`.trim())).join('');
   const other = REGION && docsView.region && docsView.region !== REGION && !isAdmin();
   $('#regionNote').textContent = other ? `You are viewing the ${regionName(docsView.region)} team's documents. They open as view only.` : '';
 }
@@ -951,7 +954,7 @@ function renderDocs() {
           <div class="cell-sub">${sub || '&nbsp;'}</div>
         </td>
         <td class="nowrap">${esc(niceDate(d.date))}</td>
-        <td><span class="chip">${d.branch === 'IN' ? 'India' : 'UAE'}</span></td>
+        <td><span class="chip">${esc(regionName(d.branch))}</span></td>
         <td class="num">
           <div class="cell-main">${fmtMoney(t.total, d.currency, false)}${Number.isInteger(t.total) ? '.00' : ''} <small>${esc(d.currency)}</small></div>
           ${t.adv && d.type !== 'quotation' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
@@ -1009,7 +1012,7 @@ function exportCsv() {
   const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = list.map(d => {
     const t = docTotals(d), c = d.customer;
-    return [d.number, kindOf(d.type).title, fmtDate(d.date), d.branch === 'IN' ? 'India' : 'UAE',
+    return [d.number, kindOf(d.type).title, fmtDate(d.date), regionName(d.branch),
       c.company, c.contact, c.city, c.country, c.mobile, c.email, d.currency,
       t.sub, t.disc, t.tax, t.total, t.adv, t.balance, d.status, d.fromQuotation || ''].map(cell).join(',');
   });
@@ -1255,8 +1258,11 @@ function storageUsage() {
 function numberingPreview(type) {
   const ex = br => formatNumber(S.numbering[type] || '', br, todayISO(), Number(S.counters[`${type}-${br}`]) || 1, Number(S.numbering.pad) || 1);
   if (REGION) return `<b>${esc(ex(REGION))}</b>`;
-  return `UAE: <b>${esc(ex('UAE'))}</b> &nbsp;·&nbsp; India: <b>${esc(ex('IN'))}</b>`;
+  return regionCodes().map(c => `${esc(regionName(c))}: <b>${esc(ex(c))}</b>`).join(' &nbsp;·&nbsp; ');
 }
+
+/** The "other office" shown next to a team's own number: the next visible team, or the team itself if it is alone. */
+function otherRegion(code) { const codes = regionCodes(); const i = codes.indexOf(code); return codes.length > 1 ? codes[(i + 1) % codes.length] : code; }
 
 /* ----- second number on the document header ----- */
 let teamContacts = null;   // [{ name, phone, region }] from the server; null = not loaded yet
@@ -1269,10 +1275,11 @@ async function loadEmployees() {
 }
 /** Dropdown options: own team first, then the other team. A name saved on an older document stays selectable. */
 function employeeOptions(selected) {
-  const mine = employees.filter(e => e.region === REGION), others = employees.filter(e => e.region !== REGION);
   const group = (label, list) => list.length ? `<optgroup label="${esc(label)}">${list.map(e => opt(e.name, e.name, selected)).join('')}</optgroup>` : '';
   const known = employees.some(e => e.name === selected);
-  return `<option value="">— select employee —</option>${REGION ? group(regionName(REGION) + ' team', mine) + group(regionName(REGION === 'IN' ? 'UAE' : 'IN') + ' team', others) : employees.map(e => opt(e.name, e.name, selected)).join('')}${selected && !known ? `<optgroup label="Previously entered">${opt(selected, selected, selected)}</optgroup>` : ''}`;
+  const order = REGION ? [REGION, ...regionCodes().filter(c => c !== REGION)] : regionCodes();
+  const groups = REGION ? order.map(c => group(regionName(c) + ' team', employees.filter(e => e.region === c))).join('') : employees.map(e => opt(e.name, e.name, selected)).join('');
+  return `<option value="">— select employee —</option>${groups}${selected && !known ? `<optgroup label="Previously entered">${opt(selected, selected, selected)}</optgroup>` : ''}`;
 }
 const digitsOf = p => String(p || '').replace(/\D/g, '');
 
@@ -1281,14 +1288,14 @@ function contactCandidates() {
   const seen = new Set([digitsOf(first)]);
   const list = [];
   const add = (phone, name) => { const k = digitsOf(phone); if (!k || seen.has(k)) return; seen.add(k); list.push({ phone, name }); };
-  for (const r of ['UAE', 'IN']) add(SB(r).branches[r].phone, `${regionName(r)} office`);
+  for (const r of regionCodes()) add((SB(r).branches[r] || {}).phone, `${regionName(r)} office`);
   (teamContacts || []).forEach(c => add(c.phone, c.name));
   return list;
 }
 
 function secondNumberHTML() {
   const cands = contactCandidates();
-  const current = (S.headerContact2 && S.headerContact2.phone) || S.branches[REGION === 'IN' ? 'UAE' : 'IN'].phone;
+  const current = (S.headerContact2 && S.headerContact2.phone) || (S.branches[otherRegion(REGION)] || {}).phone || '';
   const match = cands.find(c => digitsOf(c.phone) === digitsOf(current));
   const custom = !match;
   const groups = ['UAE', 'IN', null].map(reg => {
@@ -1515,7 +1522,7 @@ function settingsHTML() {
       </div>
     </div>`;
   const branch = (k) => {
-    const name = k === 'IN' ? 'India' : 'UAE';
+    const name = regionName(k);
     if (REGION && k !== REGION) return `<div class="branch-card" id="c2Wrap">${secondNumberHTML()}</div>`;
     return `
       <div class="branch-card">
@@ -1527,7 +1534,7 @@ function settingsHTML() {
           ${field('Default currency', `<select data-s="branches.${k}.currency">${Object.keys(CURRENCIES).map(c => opt(c, c, S.branches[k].currency)).join('')}</select>`)}
           ${field('Tax label', inp(`branches.${k}.taxLabel`, 'placeholder="VAT / GST"'))}
           ${field('Tax rate %', inp(`branches.${k}.taxRate`, 'type="number" step="any" min="0"'))}
-          ${field(k === 'IN' ? 'GSTIN (optional)' : 'TRN (optional)', inp(`branches.${k}.taxId`), 'Printed in the document footer when filled in')}
+          ${field(regionInfo(k).country === 'India' ? 'GSTIN (optional)' : 'TRN (optional)', inp(`branches.${k}.taxId`), 'Printed in the document footer when filled in')}
         </div>
       </div>`;
   };
@@ -1572,7 +1579,7 @@ function settingsHTML() {
       `)}
 
       ${sect('branches', 'Branches', 'Each document is issued from one branch. The branch sets the currency, tax and which phone number comes first.', `
-        <div class="grid2 tight">${branch('UAE')}${branch('IN')}</div>
+        <div class="grid2 tight">${regionCodes().map(branch).join('')}</div>
         ${REGION ? '' : `<div class="branch-card" id="c2Wrap" style="margin-top:14px">${secondNumberHTML()}</div>`}
       `)}
 
@@ -1625,14 +1632,9 @@ function settingsHTML() {
           <div class="cg-l">Next quotation no.</div><div><input data-s="counters.quotation-${REGION}" type="number" min="1"></div>
           <div class="cg-l">Next order form no.</div><div><input data-s="counters.order-${REGION}" type="number" min="1"></div>
           <div class="cg-l">Next invoice no.</div><div><input data-s="counters.invoice-${REGION}" type="number" min="1"></div>
-        </div>` : `<div class="counter-grid">
-          <div></div><div class="cg-h">UAE</div><div class="cg-h">India</div>
-          <div class="cg-l">Next quotation no.</div>
-          <div><input data-s="counters.quotation-UAE" type="number" min="1"></div><div><input data-s="counters.quotation-IN" type="number" min="1"></div>
-          <div class="cg-l">Next order form no.</div>
-          <div><input data-s="counters.order-UAE" type="number" min="1"></div><div><input data-s="counters.order-IN" type="number" min="1"></div>
-          <div class="cg-l">Next invoice no.</div>
-          <div><input data-s="counters.invoice-UAE" type="number" min="1"></div><div><input data-s="counters.invoice-IN" type="number" min="1"></div>
+        </div>` : `<div class="counter-grid" style="grid-template-columns: 160px repeat(${regionCodes().length}, 1fr)">
+          <div></div>${regionCodes().map(c => `<div class="cg-h">${esc(regionName(c))}</div>`).join('')}
+          ${['quotation', 'order', 'invoice'].map(t => `<div class="cg-l">Next ${kindOf(t).lower} no.</div>${regionCodes().map(c => `<div><input data-s="counters.${t}-${c}" type="number" min="1"></div>`).join('')}`).join('')}
         </div>`}
       `)}
 
@@ -1916,16 +1918,22 @@ function showLogin(message, { unreachable = false } = {}) {
   $('#loginRetry').hidden = !unreachable;
   $('#loginBtn').disabled = unreachable;
   $$('#loginForm input').forEach(i => { i.disabled = unreachable; });
-  $$('.login-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === (Store.get('dc_last_region') || 'UAE')));
+  renderLoginRegions();
   updateLoginPrefix();
   setTimeout(() => $('#loginForm [name=username]').focus(), 50);
 }
 
-const DIAL_CODE = { UAE: '+971', IN: '+91' };
 function updateLoginPrefix() {
-  const region = ($('.login-seg button.on') || {}).dataset?.v || 'UAE';
-  $('#pwPrefix').textContent = DIAL_CODE[region];
-  $('#pwHint').textContent = `Your password is your mobile number after ${DIAL_CODE[region]} (unless you changed it).`;
+  const region = ($('.login-seg button.on') || {}).dataset?.v || regionCodes()[0];
+  const dial = regionInfo(region).dial || '';
+  $('#pwPrefix').textContent = dial;
+  $('#pwHint').textContent = `Your password is your mobile number after ${dial} (unless you changed it).`;
+}
+/** Builds the team selector on the login screen from the region list. */
+function renderLoginRegions() {
+  const last = Store.get('dc_last_region') || regionCodes()[0];
+  $('.login-seg').innerHTML = regionCodes().map(c => `<button type="button" data-v="${c}" class="${c === last ? 'on' : ''}"><span class="flag">${regionInfo(c).flag || ''}</span> ${esc(regionLong(c))}</button>`).join('');
+  $('.login-seg').classList.toggle('many', regionCodes().length > 2);
 }
 
 function bindLogin() {
@@ -1966,6 +1974,7 @@ function bindLogin() {
 async function afterLogin(user) {
   USER = user;
   REGION = user.region;
+  try { const rs = await API.regions(); if (rs.length) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); } catch (e) { /* keep current list */ }
   docsView.region = REGION;
   API.info = await API.health().catch(() => API.info);
   setDbStatus(API._queue().length ? 'queued' : 'db');
@@ -1984,7 +1993,7 @@ function renderUserChip() {
   $('#navTeam').hidden = !isAdmin();
   const sw = $('#regionSwitch');
   sw.hidden = !isAdmin();
-  $$('button', sw).forEach(b => b.classList.toggle('on', b.dataset.region === REGION));
+  sw.innerHTML = regionCodes().map(c => `<button type="button" data-region="${c}" class="${c === REGION ? 'on' : ''}">${esc(regionName(c))}</button>`).join('');
 }
 
 /** Administrators can work in either team for the current session. */
@@ -2098,7 +2107,7 @@ async function renderTeam() {
       </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet – add the ${regionName(region)} team.</td></tr>`;
   const section = region => `
     <div class="card list-card" style="margin-bottom:18px">
-      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${region === 'IN' ? '🇮🇳 India team' : '🇦🇪 UAE · Dubai team'} <span>${teamUsers.filter(u => u.region === region).length}</span></button></div>
+      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(regionLong(region))} team <span>${teamUsers.filter(u => u.region === region).length}</span></button></div>
         <button class="btn sm" data-adduser="${region}">+ Add member</button></div>
       <div class="table-wrap"><table class="list team-list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
       <tbody>${rows(region)}</tbody></table></div>
@@ -2106,8 +2115,30 @@ async function renderTeam() {
   p.innerHTML = `
     <div class="page-head">
       <div><h2>Team</h2><p class="page-sub">People who can sign in. Each member belongs to one team; their name and mobile are used as “Prepared by” on their documents.</p></div>
+      <div class="page-actions"><button class="btn" id="addRegionBtn" title="Add a separate team that cannot see the others">+ New separate team</button></div>
     </div>
-    ${section('UAE')}${section('IN')}`;
+    ${regionCodes().map(section).join('')}`;
+}
+
+/** Admin: create a new, separately run team (its own visibility group – it sees none of the existing teams). */
+async function addRegionDialog() {
+  const v = await formDialog({
+    title: 'New separate team',
+    fields: [
+      { name: 'name', label: 'Team name', required: true, full: true, placeholder: 'e.g. India – Team 2' },
+      { name: 'code', label: 'Short code', required: true, placeholder: 'e.g. IN2', hint: 'Used in document numbers' },
+      { name: 'country', label: 'Country', type: 'select', value: 'India', options: [['India', 'India'], ['UAE', 'UAE']] }
+    ],
+    ok: 'Create team',
+    submit: async vals => {
+      const code = vals.code.trim().toUpperCase();
+      const base = vals.country === 'UAE' ? { dial: '+971', currency: 'AED', taxLabel: 'VAT', taxRate: 5 } : { dial: '+91', currency: 'INR', taxLabel: 'GST', taxRate: 18 };
+      // a new team is always its own group, so it is kept apart from every existing team
+      const group = 'G' + code;
+      await API.createRegion({ code, name: vals.name.trim(), group, country: vals.country, ...base });
+    }
+  });
+  if (v) { toast(`Team “${v.name}” created. Switch to it with the team switcher to add its members.`); const rs = await API.regions().catch(() => null); if (rs) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); renderUserChip(); renderTeam(); }
 }
 
 function userFields(u = {}) {
@@ -2115,13 +2146,14 @@ function userFields(u = {}) {
     { name: 'displayName', label: 'Full name', value: u.displayName, required: true, placeholder: 'e.g. Shreyash Thumar' },
     { name: 'phone', label: 'Mobile (shown on documents)', value: u.phone, type: 'tel', placeholder: '+971 55 …' },
     { name: 'username', label: 'Username', value: u.username, required: true, hint: 'Used to sign in; letters, numbers, dots or dashes' },
-    { name: 'region', label: 'Team', type: 'select', value: u.region || 'UAE', options: [['UAE', 'UAE · Dubai'], ['IN', 'India']] },
+    { name: 'region', label: 'Team', type: 'select', value: u.region || REGION || regionCodes()[0], options: regionCodes().map(c => [c, regionLong(c)]) },
     { name: 'role', label: 'Role', type: 'select', value: u.role || 'user', options: [['user', 'Member'], ['admin', 'Administrator']] }
   ];
 }
 
 function bindTeam() {
   $('#teamPanel').addEventListener('click', async e => {
+    if (e.target.closest('#addRegionBtn')) { addRegionDialog(); return; }
     const add = e.target.closest('[data-adduser]');
     if (add) {
       const fields = userFields({ region: add.dataset.adduser });
@@ -2178,6 +2210,7 @@ async function init() {
   API.onStatus = setDbStatus;
   API.onUnauthorized = () => { if (USER) { USER = null; showLogin('Your session has ended – please sign in again.'); } };
   await API.detect();
+  if (API.online) { try { const rs = await API.regions(); if (rs.length) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); } catch (e) { /* built-in list */ } }
   setInterval(() => API.flush(), 15000);
   setInterval(() => { $$('.ago[title]').forEach(el => { const iso = el.dataset.at; if (iso) el.textContent = timeAgo(iso); }); }, 60000);
   window.addEventListener('online', () => API.flush());

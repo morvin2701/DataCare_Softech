@@ -801,3 +801,8 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .file-pick-ui.picked { border-style: solid; border-color: #cde9d8; background: #f1faf5; }
 .file-pick-ui.picked b { color: #1f7a42; }
 .file-pick:hover .file-pick-ui { border-color: var(--brand); }
+
+/* three or more teams on the login screen: one per row, so long names stay on a single line */
+.login-seg.many { display: flex; flex-direction: column; }
+.login-seg.many button { white-space: nowrap; }
+.login-seg.many button + button { border-left: 0; border-top: 1px solid var(--border); }

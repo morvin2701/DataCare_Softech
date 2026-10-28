@@ -37,9 +37,7 @@
     <button type="button" role="menuitem" data-newdoc="invoice"><b>New Invoice</b><small>Bill for a confirmed order</small></button>
   </div>
   <div class="tb-actions">
-    <div class="seg region-switch" id="regionSwitch" hidden title="Administrator: choose which team to work in">
-      <button type="button" data-region="UAE">UAE</button><button type="button" data-region="IN">India</button>
-    </div>
+    <div class="seg region-switch" id="regionSwitch" hidden title="Administrator: choose which team to work in"></div>
     <span id="dbStatus" class="db-pill" hidden></span>
     <div class="user-menu" id="userMenu" hidden>
       <button type="button" class="user-chip" id="userChip" aria-haspopup="menu" aria-expanded="false">
@@ -152,10 +150,7 @@
     <h1>Sign in</h1>
     <p class="login-sub">Choose your team, then enter your username and password.</p>
     <form id="loginForm" autocomplete="on">
-      <div class="seg login-seg" data-seg="region">
-        <button type="button" data-v="UAE" class="on"><span class="flag">🇦🇪</span> UAE · Dubai</button>
-        <button type="button" data-v="IN"><span class="flag">🇮🇳</span> India</button>
-      </div>
+      <div class="seg login-seg" data-seg="region"></div>
       <label class="f">Username<input name="username" autocomplete="username" required autofocus></label>
       <label class="f">Password
         <span class="prefix-field">

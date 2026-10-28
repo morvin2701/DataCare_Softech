@@ -170,6 +170,20 @@ function typeDefaults(t) {
   return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice' };
 }
 
+/* Teams (regions). This is the built-in list used when the app runs without the server; with the server the list
+   comes from /api/regions (which may add more teams) and replaces it at sign-in. */
+let REGION_LIST = [
+  { code: 'UAE', name: 'UAE · Dubai', country: 'UAE', dial: '+971', currency: 'AED', taxLabel: 'VAT', taxRate: 5, flag: '🇦🇪' },
+  { code: 'IN', name: 'India', country: 'India', dial: '+91', currency: 'INR', taxLabel: 'GST', taxRate: 18, flag: '🇮🇳' }
+];
+const FLAG_BY_COUNTRY = { UAE: '🇦🇪', India: '🇮🇳' };
+const regionInfo = code => REGION_LIST.find(r => r.code === code) || { code, name: code, country: code, dial: '', currency: 'AED', taxLabel: 'Tax', taxRate: 0, flag: '' };
+const regionCodes = () => REGION_LIST.map(r => r.code);
+/** Default branch settings for a team, used when a team has no saved settings yet (e.g. a newly added team). */
+function branchDefaults(code) {
+  const r = regionInfo(code);
+  return { label: r.name.split('·')[0].trim().toUpperCase(), phone: '', address: r.country, currency: r.currency, taxLabel: r.taxLabel, taxRate: r.taxRate, taxId: '' };
+}
 const BRANCH_NAMES = { UAE: 'UAE (Dubai)', IN: 'India' };
 const STATUSES = {
   quotation: ['Draft', 'Sent', 'Accepted', 'Rejected'],

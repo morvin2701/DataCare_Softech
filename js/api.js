@@ -86,6 +86,8 @@ const API = {
   /* ---- users (admin) ---- */
   contacts() { return this._json('GET', '/contacts'); },
   employees() { return this._json('GET', '/employees'); },
+  regions() { return this._json('GET', '/regions'); },
+  createRegion(r) { return this._json('POST', '/regions', r); },
   users() { return this._json('GET', '/users'); },
   createUser(u) { return this._json('POST', '/users', u); },
   updateUser(id, u) { return this._json('PUT', '/users/' + id, u); },
