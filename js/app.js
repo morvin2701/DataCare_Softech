@@ -1999,9 +1999,9 @@ function renderUserChip() {
   $('#userRegion').textContent = `${teamLabel(REGION)}${isAdmin() ? ' · Administrator' : ''}`;
   $('#navTeam').hidden = !isAdmin();
   const sw = $('#regionSwitch');
-  const all = ALL_REGIONS || REGION_LIST;
-  sw.hidden = !isAdmin() || all.length < 2;   // nothing to switch to for an administrator of a single team
-  sw.innerHTML = all.map((r, i) => `<button type="button" data-region="${r.code}" class="${r.code === REGION ? 'on' : ''}${i && r.group !== all[i - 1].group ? ' grp' : ''}" title="${esc(regionLong(r.code))}${r.group !== regionGroupOf(REGION) ? ' (separate team – opens its own documents, settings and members)' : ''}"><span class="rs-full">${esc(regionName(r.code))}</span><span class="rs-short">${esc(r.code)}</span></button>`).join('');
+  // only the teams of this group (UAE / India); separate teams never appear here – they are managed on the Team page
+  sw.hidden = !isAdmin() || REGION_LIST.length < 2;
+  sw.innerHTML = REGION_LIST.map(r => `<button type="button" data-region="${r.code}" class="${r.code === REGION ? 'on' : ''}" title="${esc(regionLong(r.code))}"><span class="rs-full">${esc(regionName(r.code))}</span><span class="rs-short">${esc(r.code)}</span></button>`).join('');
 }
 
 /** Administrators can work in either team for the current session. */
@@ -2119,7 +2119,7 @@ async function renderTeam() {
           <button class="icon-act" data-uact="pw" title="Set a new password">${icon('key')}</button>
           ${u.active ? `<button class="icon-act danger" data-uact="off" title="Deactivate (cannot sign in)">${icon('ban')}</button>` : `<button class="icon-act" data-uact="on" title="Re-activate">${icon('check')}</button>`}
         </div></td>
-      </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet – add the ${esc(teamLabel(region))}.</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet. Use “+ Add member” to add people to ${esc(teamLabel(region, true))}.</td></tr>`;
   const section = region => `
     <div class="card list-card" style="margin-bottom:18px">
       <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(teamLabel(region, true))} <span>${teamUsers.filter(u => u.region === region).length}</span></button>
@@ -2128,12 +2128,14 @@ async function renderTeam() {
       <div class="table-wrap"><table class="list team-list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
       <tbody>${rows(region)}</tbody></table></div>
     </div>`;
+  const separate = (ALL_REGIONS || []).filter(r => !regionCodes().includes(r.code)).map(r => r.code);
   p.innerHTML = `
     <div class="page-head">
       <div><h2>Team</h2><p class="page-sub">People who can sign in. Each member belongs to one team; their name and mobile are used as “Prepared by” on their documents.</p></div>
       <div class="page-actions"><button class="btn" id="addRegionBtn" title="Add a separate team that cannot see the others">+ New separate team</button></div>
     </div>
-    ${regionCodes().map(section).join('')}`;
+    ${regionCodes().map(section).join('')}
+    ${separate.length ? `<div class="team-sep"><h3>Separate teams</h3><p class="page-sub">Each of these sees only its own documents, settings and people, and none of the teams above. They sign in from their own login link.</p></div>${separate.map(section).join('')}` : ''}`;
 }
 
 /** Admin: create a new, separately run team (its own visibility group – it sees none of the existing teams). */
@@ -2159,7 +2161,7 @@ async function addRegionDialog() {
     // the new team is in its own group, so it is not in this group's list: add it to the switcher directly
     try { applyRegions(await API.regions(), REGION); } catch (e) { /* switcher updates on next sign-in */ }
     renderUserChip();
-    await ask({ title: `Team “${v.name.trim()}” created`, message: `Their login link is:\n${location.origin}${location.pathname}?team=${code}\n\nOnly this link shows their team on the sign-in screen; the normal address shows only ${regionCodes().map(regionName).join(' and ')}. Switch to ${v.name.trim()} in the top bar to add its members.`, ok: 'Copy link', cancel: 'Close' })
+    await ask({ title: `Team “${v.name.trim()}” created`, message: `Their login link is:\n${location.origin}${location.pathname}?team=${code}\n\nOnly this link shows their team on the sign-in screen; the normal address shows only ${regionCodes().map(regionName).join(' and ')}. Add its members in its section at the bottom of this Team page.`, ok: 'Copy link', cancel: 'Close' })
       .then(copy => { if (copy) navigator.clipboard && navigator.clipboard.writeText(`${location.origin}${location.pathname}?team=${code}`).then(() => toast('Login link copied')); });
     renderTeam();
   }
@@ -2170,7 +2172,7 @@ function userFields(u = {}) {
     { name: 'displayName', label: 'Full name', value: u.displayName, required: true, placeholder: 'e.g. Shreyash Thumar' },
     { name: 'phone', label: 'Mobile (shown on documents)', value: u.phone, type: 'tel', placeholder: '+971 55 …' },
     { name: 'username', label: 'Username', value: u.username, required: true, hint: 'Used to sign in; letters, numbers, dots or dashes' },
-    { name: 'region', label: 'Team', type: 'select', value: u.region || REGION || regionCodes()[0], options: regionCodes().map(c => [c, regionLong(c)]) },
+    { name: 'region', label: 'Team', type: 'select', value: u.region || REGION || regionCodes()[0], options: (u.region && !regionCodes().includes(u.region) ? [u.region] : regionCodes()).map(c => [c, regionLong(c)]) },
     { name: 'role', label: 'Role', type: 'select', value: u.role || 'user', options: [['user', 'Member'], ['admin', 'Administrator']] }
   ];
 }

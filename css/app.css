@@ -400,7 +400,6 @@ table.list .nowrap { white-space: nowrap; }
 /* ===== user menu / region switch ===== */
 .region-switch { width: auto; margin-right: 4px; }
 .region-switch button { padding: 6px 12px; font-size: 12.5px; }
-.region-switch button.grp { border-left: 3px double var(--border); }
 .region-switch button { white-space: nowrap; }
 .region-switch .rs-short { display: none; }
 .user-menu { position: relative; }
@@ -815,3 +814,8 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .login-seg.single { display: none; }
 /* dialog messages may contain a link on its own line */
 .dlg p { white-space: pre-line; overflow-wrap: anywhere; }
+
+/* Team page: separate teams listed below the company's own teams */
+.team-sep { margin: 30px 0 12px; padding-top: 18px; border-top: 1px dashed var(--border); }
+.team-sep h3 { margin: 0 0 4px; font-size: 16px; }
+.team-sep .page-sub { margin: 0; }

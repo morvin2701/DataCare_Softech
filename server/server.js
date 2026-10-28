@@ -75,6 +75,8 @@ const canSeeRegion = (user, region) => db.regionGroup(region) === groupOf(user);
 // Administrators of the original group (the company's own UAE/India teams) manage every team; an administrator
 // created inside a separate team manages that team's group only, and never learns of the others.
 const managesAllTeams = user => user.role === 'admin' && db.regionGroup(user.homeRegion) === 'A';
+// people of a team can be managed by an owner administrator (any team) or an administrator of that team's group
+const canManagePeopleOf = (user, region) => managesAllTeams(user) || canSeeRegion(user, region);
 const canWriteRegion = (user, region) => (user.role === 'admin' && canSeeRegion(user, region)) || user.homeRegion === region;
 
 // slow down password guessing: 10 failures per IP per 15 minutes
@@ -177,10 +179,11 @@ app.get('/api/contacts', requireUser, wrap(async (req, res) => {
 }));
 
 /* ---------- users (admin) ---------- */
-app.get('/api/users', requireUser, requireAdmin, wrap(async (req, res) => res.json(await db.listUsers(groupOf(req.user)))));
+// the Team page of an owner administrator lists every team's people (separate teams in their own sections)
+app.get('/api/users', requireUser, requireAdmin, wrap(async (req, res) => res.json(await db.listUsers(managesAllTeams(req.user) ? null : groupOf(req.user)))));
 
 app.post('/api/users', requireUser, requireAdmin, wrap(async (req, res) => {
-  if (req.body && req.body.region && !canSeeRegion(req.user, req.body.region)) throw fail(403, 'That team is outside the group you are working in.');
+  if (req.body && req.body.region && !canManagePeopleOf(req.user, req.body.region)) throw fail(403, 'That team is outside the group you are working in.');
   try { res.json(await db.createUser(req.body || {})); }
   catch (err) { if (db.isDuplicate(err)) throw fail(409, 'That username is already taken.'); throw err; }
 }));
@@ -190,8 +193,10 @@ app.put('/api/users/:id', requireUser, requireAdmin, wrap(async (req, res) => {
   const body = req.body || {};
   const existing = await db.getUser(id);
   if (!existing) throw fail(404, 'user not found');
-  if (!canSeeRegion(req.user, existing.Region)) throw fail(404, 'user not found');
-  if (body.region && !canSeeRegion(req.user, body.region)) throw fail(403, 'That team is outside the group you are working in.');
+  if (!canManagePeopleOf(req.user, existing.Region)) throw fail(404, 'user not found');
+  // a person stays inside their own group: moving between groups would hand them the other group's documents
+  if (body.region && db.regionGroup(body.region) !== db.regionGroup(existing.Region)) throw fail(403, 'A member cannot be moved to a separate team.');
+  if (body.region && !canManagePeopleOf(req.user, body.region)) throw fail(403, 'That team is outside the group you are working in.');
   // never lock everyone out: the last active administrator stays an active administrator
   if (existing.Role === 'admin' && existing.Active && (body.role !== 'admin' || body.active === false) && (await db.countActiveAdmins()) <= 1) {
     throw fail(400, 'This is the only active administrator account.');
@@ -202,7 +207,7 @@ app.put('/api/users/:id', requireUser, requireAdmin, wrap(async (req, res) => {
 
 app.post('/api/users/:id/password', requireUser, requireAdmin, wrap(async (req, res) => {
   const target = await db.getUser(Number(req.params.id));
-  if (!target || !canSeeRegion(req.user, target.Region)) throw fail(404, 'user not found');
+  if (!target || !canManagePeopleOf(req.user, target.Region)) throw fail(404, 'user not found');
   await db.setPassword(Number(req.params.id), (req.body || {}).password);
   res.json({ ok: true });
 }));
