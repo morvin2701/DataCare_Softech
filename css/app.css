@@ -400,6 +400,9 @@ table.list .nowrap { white-space: nowrap; }
 /* ===== user menu / region switch ===== */
 .region-switch { width: auto; margin-right: 4px; }
 .region-switch button { padding: 6px 12px; font-size: 12.5px; }
+.region-switch button.grp { border-left: 3px double var(--border); }
+.region-switch button { white-space: nowrap; }
+.region-switch .rs-short { display: none; }
 .user-menu { position: relative; }
 .user-chip { display: flex; align-items: center; gap: 9px; border: 1px solid var(--border); background: #fff; border-radius: 22px; padding: 4px 10px 4px 4px; cursor: pointer; }
 .user-chip:hover { border-color: #b9c0cc; }
@@ -487,6 +490,8 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
   .avatar { width: 32px; height: 32px; font-size: 12.5px; }
   .region-switch { margin-right: 0; }
   .region-switch button { padding: 5px 9px; font-size: 12px; }
+  .region-switch .rs-full { display: none; }   /* phone: short codes (UAE / IN / DM), so the bar keeps the company name visible */
+  .region-switch .rs-short { display: inline; }
   .menu { right: -4px; min-width: 210px; }
 
   /* ---- bottom tab bar ---- */

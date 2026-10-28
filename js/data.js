@@ -177,7 +177,20 @@ let REGION_LIST = [
   { code: 'IN', name: 'India', country: 'India', dial: '+91', currency: 'INR', taxLabel: 'GST', taxRate: 18, flag: '🇮🇳' }
 ];
 const FLAG_BY_COUNTRY = { UAE: '🇦🇪', India: '🇮🇳' };
-const regionInfo = code => REGION_LIST.find(r => r.code === code) || { code, name: code, country: code, dial: '', currency: 'AED', taxLabel: 'Tax', taxRate: 0, flag: '' };
+/* ALL_REGIONS: every team the signed-in person may switch to (administrators get all teams, members just their own
+   group) – this is what the switcher in the top bar lists. REGION_LIST always holds only the teams of the group
+   being worked in, which is what documents, settings, tabs and the Team page use. */
+let ALL_REGIONS = null;
+const regionGroupOf = code => ((ALL_REGIONS || REGION_LIST).find(r => r.code === code) || {}).group;
+/** Takes the server's team list: REGION_LIST becomes the current group's teams, ALL_REGIONS the whole list. */
+function applyRegions(rows, current) {
+  const all = rows.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' }));
+  if (!all.length) return;
+  const g = (all.find(r => r.code === current) || {}).group;
+  ALL_REGIONS = all;
+  REGION_LIST = g === undefined ? all : all.filter(r => r.group === g);
+}
+const regionInfo = code => REGION_LIST.find(r => r.code === code) || (ALL_REGIONS || []).find(r => r.code === code) || { code, name: code, country: code, dial: '', currency: 'AED', taxLabel: 'Tax', taxRate: 0, flag: '' };
 const regionCodes = () => REGION_LIST.map(r => r.code);
 /** Default branch settings for a team, used when a team has no saved settings yet (e.g. a newly added team). */
 function branchDefaults(code) {

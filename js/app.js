@@ -19,6 +19,8 @@ const canEdit = d => !REGION || isAdmin() || d.branch === REGION;
 const canWriteRegion = r => !REGION || isAdmin() || USER.homeRegion === r;
 const regionName = r => regionInfo(r).name.split('·')[0].trim();   // 'UAE', 'India', 'India 2' …
 const regionLong = r => regionInfo(r).name;
+/** "India team" – but a name that already says Team ("Devendra's Team") is used as it is, never "Devendra's Team team". */
+const teamLabel = (r, long) => { const n = long ? regionLong(r) : regionName(r); return /\bteam\b/i.test(n) ? n : `${n} team`; };
 function setS(next) { S = next; if (ALL_S && REGION) ALL_S[REGION] = S; }
 
 /* ---------------- persistence ---------------- */
@@ -348,7 +350,7 @@ function writeVal(el, v) {
 function loadForm() {
   const form = $('#form');
   setTimeout(refreshCompOpts);
-  form.innerHTML = (readOnly ? `<div class="ro-banner">${icon('eye')}<div><b>View only.</b> This ${doc.type} belongs to the ${regionName(doc.branch)} team. You can read it and download the PDF, but not change it.</div></div>` : '') + formHTML(doc);
+  form.innerHTML = (readOnly ? `<div class="ro-banner">${icon('eye')}<div><b>View only.</b> This ${doc.type} belongs to the ${teamLabel(doc.branch)}. You can read it and download the PDF, but not change it.</div></div>` : '') + formHTML(doc);
   renderItems();
   syncForm();
   refreshCustomerList();
@@ -639,7 +641,7 @@ async function makeNext(type) {
 }
 
 function saveDoc(silent = false) {
-  if (readOnly) { toast(`This document belongs to the ${regionName(doc.branch)} team and can only be viewed.`, true); return false; }
+  if (readOnly) { toast(`This document belongs to the ${teamLabel(doc.branch)} and can only be viewed.`, true); return false; }
   if (!employeeOk(doc)) { employeeMissing(); return false; }
   const firstSave = !isSaved(doc);
   if (firstSave) addHistory(doc, 'created', { status: doc.status, from: doc.fromOrder || doc.fromQuotation || '' });
@@ -848,7 +850,7 @@ function renderRegionTabs() {
   const tab = (r, label) => `<button type="button" data-region="${r}" class="${docsView.region === r ? 'on' : ''}">${label} <span>${n(r)}</span></button>`;
   el.innerHTML = (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, `${regionInfo(c).flag || ''} ${esc(regionLong(c))}`.trim())).join('');
   const other = REGION && docsView.region && docsView.region !== REGION && !isAdmin();
-  $('#regionNote').textContent = other ? `You are viewing the ${regionName(docsView.region)} team's documents. They open as view only.` : '';
+  $('#regionNote').textContent = other ? `You are viewing the documents of the ${teamLabel(docsView.region)}. They open as view only.` : '';
 }
 
 function renderStats() {
@@ -1543,7 +1545,7 @@ function settingsHTML() {
 
   return `
     <div class="page-head">
-      <div><h2>Settings${REGION ? ` <span class="chip region-chip">${regionName(REGION)} team</span>` : ''}</h2><p class="page-sub">${REGION ? `These settings apply to documents issued by the ${regionName(REGION)} team.` : 'Company details, branding, numbering and default text used on every document.'}</p></div>
+      <div><h2>Settings${REGION ? ` <span class="chip region-chip">${esc(teamLabel(REGION))}</span>` : ''}</h2><p class="page-sub">${REGION ? `These settings apply to documents issued by the ${esc(teamLabel(REGION))}.` : 'Company details, branding, numbering and default text used on every document.'}</p></div>
       <div class="page-actions"><span class="save-pill" id="savePill">All changes saved</span></div>
     </div>
     <div class="settings-layout">
@@ -1979,7 +1981,7 @@ function bindLogin() {
 async function afterLogin(user) {
   USER = user;
   REGION = user.region;
-  try { const rs = await API.regions(); if (rs.length) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); } catch (e) { /* keep current list */ }
+  try { applyRegions(await API.regions(), REGION); } catch (e) { /* keep current list */ }
   docsView.region = REGION;
   API.info = await API.health().catch(() => API.info);
   setDbStatus(API._queue().length ? 'queued' : 'db');
@@ -1994,11 +1996,12 @@ function renderUserChip() {
   menu.hidden = false;
   $('#userAvatar').textContent = USER.displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   $('#userName').textContent = USER.displayName;
-  $('#userRegion').textContent = `${regionName(REGION)} team${isAdmin() ? ' · Administrator' : ''}`;
+  $('#userRegion').textContent = `${teamLabel(REGION)}${isAdmin() ? ' · Administrator' : ''}`;
   $('#navTeam').hidden = !isAdmin();
   const sw = $('#regionSwitch');
-  sw.hidden = !isAdmin();
-  sw.innerHTML = regionCodes().map(c => `<button type="button" data-region="${c}" class="${c === REGION ? 'on' : ''}">${esc(regionName(c))}</button>`).join('');
+  const all = ALL_REGIONS || REGION_LIST;
+  sw.hidden = !isAdmin() || all.length < 2;   // nothing to switch to for an administrator of a single team
+  sw.innerHTML = all.map((r, i) => `<button type="button" data-region="${r.code}" class="${r.code === REGION ? 'on' : ''}${i && r.group !== all[i - 1].group ? ' grp' : ''}" title="${esc(regionLong(r.code))}${r.group !== regionGroupOf(REGION) ? ' (separate team – opens its own documents, settings and members)' : ''}"><span class="rs-full">${esc(regionName(r.code))}</span><span class="rs-short">${esc(r.code)}</span></button>`).join('');
 }
 
 /** Administrators can work in either team for the current session. */
@@ -2006,6 +2009,13 @@ async function switchRegion(r) {
   if (r === REGION || !isAdmin()) return;
   if (!(await confirmDiscard())) return;
   try { await API.setRegion(r); } catch (err) { toast(err.message, true); return; }
+  if (regionGroupOf(r) !== regionGroupOf(REGION)) {
+    // another group: its documents, settings and members are a different set, so start the app again in that team
+    Store.set('dc_current', null);
+    toast(`Opening the ${teamLabel(r)}…`);
+    location.reload();
+    return;
+  }
   REGION = r;
   S = ALL_S[r];
   docsView.region = r;
@@ -2014,7 +2024,7 @@ async function switchRegion(r) {
   $('#tplSel').value = S.template;
   const current = $$('.view').find(v => v.classList.contains('active')).id.replace('view-', '');
   showView(current);
-  toast(`Now working in the ${regionName(r)} team`);
+  toast(`Now working in the ${teamLabel(r)}`);
 }
 
 function bindUserMenu() {
@@ -2109,10 +2119,10 @@ async function renderTeam() {
           <button class="icon-act" data-uact="pw" title="Set a new password">${icon('key')}</button>
           ${u.active ? `<button class="icon-act danger" data-uact="off" title="Deactivate (cannot sign in)">${icon('ban')}</button>` : `<button class="icon-act" data-uact="on" title="Re-activate">${icon('check')}</button>`}
         </div></td>
-      </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet – add the ${regionName(region)} team.</td></tr>`;
+      </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet – add the ${esc(teamLabel(region))}.</td></tr>`;
   const section = region => `
     <div class="card list-card" style="margin-bottom:18px">
-      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(regionLong(region))} team <span>${teamUsers.filter(u => u.region === region).length}</span></button>
+      <div class="list-toolbar"><div class="tabs"><button class="on" type="button">${regionInfo(region).flag || ''} ${esc(teamLabel(region, true))} <span>${teamUsers.filter(u => u.region === region).length}</span></button>
         <button type="button" class="btn link sm" data-copy-login="${esc(region)}" title="Copy this team's sign-in link">Copy login link</button></div>
         <button class="btn sm" data-adduser="${region}">+ Add member</button></div>
       <div class="table-wrap"><table class="list team-list"><thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Last sign-in</th><th>Status</th><th class="act-col"></th></tr></thead>
@@ -2147,9 +2157,9 @@ async function addRegionDialog() {
   if (v) {
     const code = v.code.trim().toUpperCase();
     // the new team is in its own group, so it is not in this group's list: add it to the switcher directly
-    if (!regionCodes().includes(code)) REGION_LIST.push({ code, name: v.name.trim(), country: v.country, dial: v.country === 'UAE' ? '+971' : '+91', currency: v.country === 'UAE' ? 'AED' : 'INR', taxLabel: v.country === 'UAE' ? 'VAT' : 'GST', taxRate: v.country === 'UAE' ? 5 : 18, flag: FLAG_BY_COUNTRY[v.country] || '' });
+    try { applyRegions(await API.regions(), REGION); } catch (e) { /* switcher updates on next sign-in */ }
     renderUserChip();
-    await ask({ title: `Team “${v.name.trim()}” created`, message: `Their login link is:\n${location.origin}${location.pathname}?team=${code}\n\nOnly this link shows their team on the sign-in screen; the normal address shows only ${regionCodes().filter(c => c !== code).map(regionName).join(' and ')}. Switch to ${code} in the top bar to add its members.`, ok: 'Copy link', cancel: 'Close' })
+    await ask({ title: `Team “${v.name.trim()}” created`, message: `Their login link is:\n${location.origin}${location.pathname}?team=${code}\n\nOnly this link shows their team on the sign-in screen; the normal address shows only ${regionCodes().map(regionName).join(' and ')}. Switch to ${v.name.trim()} in the top bar to add its members.`, ok: 'Copy link', cancel: 'Close' })
       .then(copy => { if (copy) navigator.clipboard && navigator.clipboard.writeText(`${location.origin}${location.pathname}?team=${code}`).then(() => toast('Login link copied')); });
     renderTeam();
   }
@@ -2226,7 +2236,7 @@ async function init() {
   API.onStatus = setDbStatus;
   API.onUnauthorized = () => { if (USER) { USER = null; showLogin('Your session has ended – please sign in again.'); } };
   await API.detect();
-  if (API.online) { try { const rs = await API.regions(); if (rs.length) REGION_LIST = rs.map(r => ({ ...r, flag: FLAG_BY_COUNTRY[r.country] || '' })); } catch (e) { /* built-in list */ } }
+  if (API.online) { try { applyRegions(await API.regions(), null); } catch (e) { /* built-in list */ } }
   setInterval(() => API.flush(), 15000);
   setInterval(() => { $$('.ago[title]').forEach(el => { const iso = el.dataset.at; if (iso) el.textContent = timeAgo(iso); }); }, 60000);
   window.addEventListener('online', () => API.flush());

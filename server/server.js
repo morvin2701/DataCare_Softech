@@ -72,6 +72,9 @@ const requireAdmin = (req, res, next) => (req.user && req.user.role === 'admin' 
 /** The visibility group a request may see: a member's own; for an admin, the group of the team they are working in. */
 const groupOf = user => db.regionGroup(user.role === 'admin' ? user.region : user.homeRegion);
 const canSeeRegion = (user, region) => db.regionGroup(region) === groupOf(user);
+// Administrators of the original group (the company's own UAE/India teams) manage every team; an administrator
+// created inside a separate team manages that team's group only, and never learns of the others.
+const managesAllTeams = user => user.role === 'admin' && db.regionGroup(user.homeRegion) === 'A';
 const canWriteRegion = (user, region) => (user.role === 'admin' && canSeeRegion(user, region)) || user.homeRegion === region;
 
 // slow down password guessing: 10 failures per IP per 15 minutes
@@ -91,7 +94,9 @@ function noteFail(ip) {
 app.get('/api/regions', wrap(async (req, res) => {
   if (!req.user) await db.refreshRegions();   // signed-out lookups read the table, so a just-created team resolves at once
   const rows = db.regionRows();
-  if (req.user) return res.json(rows.filter(r => r.group === groupOf(req.user)));
+  // an administrator manages every team, so the top-bar switcher needs the whole list (with groups);
+  // a member gets only the teams of their own group.
+  if (req.user) return res.json(managesAllTeams(req.user) ? rows : rows.filter(r => r.group === groupOf(req.user)));
   // signed out (login screen): one group only, never the whole list – a team must not learn that other teams exist.
   // The group is chosen by the ?team=<code> in the login link; without it, the original group.
   const hint = String(req.query.team || '').toUpperCase();
@@ -147,6 +152,7 @@ app.get('/api/auth/me', wrap(async (req, res) => {
 app.post('/api/auth/region', requireUser, requireAdmin, wrap(async (req, res) => {
   const { region } = req.body || {};
   if (!db.REGIONS.includes(region)) throw fail(400, 'unknown team');
+  if (!managesAllTeams(req.user) && db.regionGroup(region) !== db.regionGroup(req.user.homeRegion)) throw fail(403, 'This team is not yours to manage.');
   await db.setSessionRegion(req.token, region);
   res.json({ ok: true, region });
 }));
