@@ -1963,7 +1963,7 @@ function bindLogin() {
     btn.disabled = true; btn.textContent = 'Signing in…'; err.hidden = true;
     try {
       const user = await API.login(region, username, password);
-      Store.set('dc_last_region', region);
+      if (user.homeRegion === region || user.region === region) Store.set('dc_last_region', region);   // remember only a team that is shown on this page
       form.password.value = '';
       $('#login').hidden = true;
       await afterLogin(user);

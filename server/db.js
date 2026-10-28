@@ -280,8 +280,10 @@ async function login(username, password, region) {
     .query('SELECT * FROM dbo.Users WHERE Username = @u');
   const row = r.recordset[0];
   if (!row || !row.Active || !verifyPassword(String(password || ''), row.PasswordHash)) return null;
-  if (row.Role !== 'admin' && region && region !== row.Region) return { wrongRegion: row.Region };
-  const useRegion = REGIONS.includes(region) ? region : row.Region;
+  // A member always signs in to their own team, whichever team was picked on the sign-in page: the password proves
+  // who they are, so a wrong pick (or a separate team's member using the normal address) just works.
+  // An administrator may pick any team of their own group to work in; anything else falls back to their own team.
+  const useRegion = row.Role === 'admin' && REGIONS.includes(region) && regionGroup(region) === regionGroup(row.Region) ? region : row.Region;
   const token = crypto.randomBytes(32).toString('base64url');
   await pool.request().input('t', sql.NVarChar(80), token).input('id', sql.Int, row.Id).input('r', sql.NVarChar(8), useRegion)
     .input('exp', sql.DateTime2, new Date(Date.now() + SESSION_DAYS * 864e5))

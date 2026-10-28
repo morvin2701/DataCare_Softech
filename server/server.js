@@ -124,16 +124,6 @@ app.post('/api/auth/login', wrap(async (req, res) => {
   const { username, password, region } = req.body || {};
   const r = await db.login(username, password, db.REGIONS.includes(region) ? region : null);
   if (!r) { noteFail(ip); return res.status(401).json({ error: 'Incorrect username or password.' }); }
-  if (r.wrongRegion) {
-    const t = db.regionRows().find(x => x.code === r.wrongRegion);
-    const hint = String((req.body || {}).region || '');
-    const sameGroup = t && db.regionGroup(hint) === t.group;
-    const label = t ? (/team/i.test(t.name) ? t.name : `${t.name} team`) : r.wrongRegion;
-    // a team in another group is never named here: that would reveal it exists
-    return res.status(403).json(sameGroup
-      ? { error: `This account belongs to ${label}. Select that team to sign in.`, region: r.wrongRegion }
-      : { error: 'This account is not part of the teams on this sign-in page. Use the sign-in link your administrator gave you.' });
-  }
   loginFails.delete(ip);
   setCookie(res, r.token);
   res.json({ ...r.user, token: r.token });
