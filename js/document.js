@@ -44,7 +44,7 @@ function phoneRegion(phone) {
     The second number's label follows its country code, so two UAE numbers both read "UAE". */
 function headerContacts(d, S) {
   const own = S.branches[d.branch];
-  const codes = typeof regionCodes === 'function' ? regionCodes() : ['UAE', 'IN'];
+  const codes = typeof groupCodes === 'function' ? groupCodes(d.branch) : ['UAE', 'IN'];   // offices of the issuing team's own group
   const i = codes.indexOf(d.branch);
   const otherBr = codes.length > 1 ? codes[(i + 1) % codes.length] : d.branch;
   const otherB = S.branches[otherBr] || own;

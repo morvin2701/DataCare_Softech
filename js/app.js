@@ -15,12 +15,15 @@ let REGION = null;      // team the app is working in: 'UAE' | 'IN' | null = no 
 let ALL_S = null;       // settings of both teams when signed in
 const isAdmin = () => !!USER && USER.role === 'admin';
 const SB = br => (ALL_S && ALL_S[br]) || S;                            // settings that apply to a branch
-const canEdit = d => !REGION || isAdmin() || d.branch === REGION;
-const canWriteRegion = r => !REGION || isAdmin() || USER.homeRegion === r;
+// administrators change anything in their own group; a separate team's documents are view only for them
+const canEdit = d => !REGION || d.branch === REGION || (isAdmin() && regionCodes().includes(d.branch));
+const canWriteRegion = r => !REGION || USER.homeRegion === r || (isAdmin() && regionCodes().includes(r));
 const regionName = r => regionInfo(r).name.split('·')[0].trim();   // 'UAE', 'India', 'India 2' …
 const regionLong = r => regionInfo(r).name;
 /** "India team" – but a name that already says Team ("Devendra's Team") is used as it is, never "Devendra's Team team". */
 const teamLabel = (r, long) => { const n = long ? regionLong(r) : regionName(r); return /\bteam\b/i.test(n) ? n : `${n} team`; };
+/** "the India team", or "Devendra's Team" (a name that already says Team takes no "the"). */
+const theTeam = (r, long) => { const n = long ? regionLong(r) : regionName(r); return /\bteam\b/i.test(n) ? n : `the ${n} team`; };
 function setS(next) { S = next; if (ALL_S && REGION) ALL_S[REGION] = S; }
 
 /* ---------------- persistence ---------------- */
@@ -90,6 +93,11 @@ async function loadFromServer() {
       for (const c of regionCodes()) if (!ALL_S[r].branches[c]) ALL_S[r].branches[c] = branchDefaults(c);
       if (!remote[r] && canWriteRegion(r)) API.putSettings(r, clone(ALL_S[r])).catch(() => {});
       Store.set('dc_settings_' + r, ALL_S[r]);
+    }
+    // separate teams an owner administrator can look at: their own settings, used to show their documents as they issued them
+    for (const c of separateCodes()) {
+      ALL_S[c] = mergeDefaults(DEFAULT_SETTINGS, remote[c] || null);
+      if (!ALL_S[c].branches[c]) ALL_S[c].branches[c] = branchDefaults(c);
     }
     S = ALL_S[REGION];
     if (remoteDocs.length || !localDocs.length) docs = remoteDocs;
@@ -350,7 +358,7 @@ function writeVal(el, v) {
 function loadForm() {
   const form = $('#form');
   setTimeout(refreshCompOpts);
-  form.innerHTML = (readOnly ? `<div class="ro-banner">${icon('eye')}<div><b>View only.</b> This ${doc.type} belongs to the ${teamLabel(doc.branch)}. You can read it and download the PDF, but not change it.</div></div>` : '') + formHTML(doc);
+  form.innerHTML = (readOnly ? `<div class="ro-banner">${icon('eye')}<div><b>View only.</b> This ${doc.type} belongs to ${theTeam(doc.branch)}. You can read it and download the PDF, but not change it.</div></div>` : '') + formHTML(doc);
   renderItems();
   syncForm();
   refreshCustomerList();
@@ -641,7 +649,7 @@ async function makeNext(type) {
 }
 
 function saveDoc(silent = false) {
-  if (readOnly) { toast(`This document belongs to the ${teamLabel(doc.branch)} and can only be viewed.`, true); return false; }
+  if (readOnly) { toast(`This document belongs to ${theTeam(doc.branch)} and can only be viewed.`, true); return false; }
   if (!employeeOk(doc)) { employeeMissing(); return false; }
   const firstSave = !isSaved(doc);
   if (firstSave) addHistory(doc, 'created', { status: doc.status, from: doc.fromOrder || doc.fromQuotation || '' });
@@ -819,7 +827,7 @@ function moneyLines(obj) {
   const entries = Object.entries(obj).filter(([, v]) => v);
   if (!entries.length) {
     const br = docsView.region || REGION || S.lastBranch || 'UAE';
-    const c = SB(br).branches[br].currency;
+    const c = (SB(br).branches[br] || branchDefaults(br)).currency;
     return `<div class="stat-v">${c} 0.00</div>`;
   }
   return entries.map(([c, v], i) => `<div class="stat-v${i ? ' sec' : ''}">${c} ${fmtMoney(v, c, false)}${Number.isInteger(round2(v)) ? '.00' : ''}</div>`).join('');
@@ -848,9 +856,13 @@ function renderRegionTabs() {
   const el = $('#regionTabs');
   const n = r => docs.filter(d => !r || d.branch === r).length;
   const tab = (r, label) => `<button type="button" data-region="${r}" class="${docsView.region === r ? 'on' : ''}">${label} <span>${n(r)}</span></button>`;
-  el.innerHTML = (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, `${regionInfo(c).flag || ''} ${esc(regionLong(c))}`.trim())).join('');
-  const other = REGION && docsView.region && docsView.region !== REGION && !isAdmin();
-  $('#regionNote').textContent = other ? `You are viewing the documents of the ${teamLabel(docsView.region)}. They open as view only.` : '';
+  const label = c => `${regionInfo(c).flag || ''} ${esc(regionLong(c))}`.trim();
+  const sep = separateCodes();
+  el.innerHTML = (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, label(c))).join('')
+    + (sep.length ? `<span class="tabs-sep" aria-hidden="true"></span>` + sep.map(c => tab(c, label(c))).join('') : '');
+  const r = docsView.region;
+  const other = REGION && r && r !== REGION && (!isAdmin() || !regionCodes().includes(r));
+  $('#regionNote').textContent = other ? `You are viewing the documents of ${theTeam(r)}. They open as view only.` : '';
 }
 
 function renderStats() {
@@ -870,7 +882,7 @@ function renderStats() {
     <div class="stat">
       <div class="stat-ic violet">${icon('order')}</div>
       <div><div class="stat-l">Order Forms</div><div class="stat-v">${orders.length}</div>
-      <div class="stat-s">${orders.filter(d => d.status === 'Installed').length} installed · ${orders.filter(d => ['Confirmed', 'In Progress'].includes(d.status)).length} in hand</div></div>
+      <div class="stat-s">${orders.filter(d => d.status === 'Completed').length} completed · ${orders.filter(d => d.status === 'Pending').length} pending</div></div>
     </div>
     <div class="stat">
       <div class="stat-ic orange">${icon('inv')}</div>
@@ -1545,7 +1557,7 @@ function settingsHTML() {
 
   return `
     <div class="page-head">
-      <div><h2>Settings${REGION ? ` <span class="chip region-chip">${esc(teamLabel(REGION))}</span>` : ''}</h2><p class="page-sub">${REGION ? `These settings apply to documents issued by the ${esc(teamLabel(REGION))}.` : 'Company details, branding, numbering and default text used on every document.'}</p></div>
+      <div><h2>Settings${REGION ? ` <span class="chip region-chip">${esc(teamLabel(REGION))}</span>` : ''}</h2><p class="page-sub">${REGION ? `These settings apply to documents issued by ${esc(theTeam(REGION))}.` : 'Company details, branding, numbering and default text used on every document.'}</p></div>
       <div class="page-actions"><span class="save-pill" id="savePill">All changes saved</span></div>
     </div>
     <div class="settings-layout">
@@ -2012,7 +2024,7 @@ async function switchRegion(r) {
   if (regionGroupOf(r) !== regionGroupOf(REGION)) {
     // another group: its documents, settings and members are a different set, so start the app again in that team
     Store.set('dc_current', null);
-    toast(`Opening the ${teamLabel(r)}…`);
+    toast(`Opening ${theTeam(r)}…`);
     location.reload();
     return;
   }
@@ -2024,7 +2036,7 @@ async function switchRegion(r) {
   $('#tplSel').value = S.template;
   const current = $$('.view').find(v => v.classList.contains('active')).id.replace('view-', '');
   showView(current);
-  toast(`Now working in the ${teamLabel(r)}`);
+  toast(`Now working in ${theTeam(r)}`);
 }
 
 function bindUserMenu() {

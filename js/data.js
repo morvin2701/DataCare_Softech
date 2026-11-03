@@ -192,6 +192,10 @@ function applyRegions(rows, current) {
 }
 const regionInfo = code => REGION_LIST.find(r => r.code === code) || (ALL_REGIONS || []).find(r => r.code === code) || { code, name: code, country: code, dial: '', currency: 'AED', taxLabel: 'Tax', taxRate: 0, flag: '' };
 const regionCodes = () => REGION_LIST.map(r => r.code);
+/** Codes of the teams in the same group as `code` (for a separate team: just itself). */
+const groupCodes = code => { const all = ALL_REGIONS || REGION_LIST; const g = (all.find(r => r.code === code) || {}).group; return g === undefined ? REGION_LIST.map(r => r.code) : all.filter(r => r.group === g).map(r => r.code); };
+/** Teams outside the group being worked in that this person may still look at (owner administrators: separate teams). */
+const separateCodes = () => (ALL_REGIONS || []).filter(r => !REGION_LIST.some(x => x.code === r.code)).map(r => r.code);
 /** Default branch settings for a team, used when a team has no saved settings yet (e.g. a newly added team). */
 function branchDefaults(code) {
   const r = regionInfo(code);

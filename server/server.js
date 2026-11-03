@@ -77,6 +77,8 @@ const canSeeRegion = (user, region) => db.regionGroup(region) === groupOf(user);
 const managesAllTeams = user => user.role === 'admin' && db.regionGroup(user.homeRegion) === 'A';
 // people of a team can be managed by an owner administrator (any team) or an administrator of that team's group
 const canManagePeopleOf = (user, region) => managesAllTeams(user) || canSeeRegion(user, region);
+// reading: an owner administrator sees every team's documents (separate teams view only); others only their group
+const canViewRegion = (user, region) => managesAllTeams(user) || canSeeRegion(user, region);
 const canWriteRegion = (user, region) => (user.role === 'admin' && canSeeRegion(user, region)) || user.homeRegion === region;
 
 // slow down password guessing: 10 failures per IP per 15 minutes
@@ -114,7 +116,7 @@ app.post('/api/regions', requireUser, requireAdmin, wrap(async (req, res) => {
 /* ---------- auth ---------- */
 app.get('/api/health', wrap(async (req, res) => {
   const s = await db.stats();
-  const docs = req.user ? Object.fromEntries(Object.entries(s.documents || {}).filter(([br]) => canSeeRegion(req.user, br))) : undefined;
+  const docs = req.user ? Object.fromEntries(Object.entries(s.documents || {}).filter(([br]) => canViewRegion(req.user, br))) : undefined;
   res.json({ ok: true, database: s.database, auth: true, ...(req.user ? { documents: docs } : {}) });
 }));
 
@@ -203,7 +205,7 @@ app.post('/api/users/:id/password', requireUser, requireAdmin, wrap(async (req, 
 }));
 
 /* ---------- settings (per region) ---------- */
-app.get('/api/settings', requireUser, wrap(async (req, res) => res.json(await db.getAllSettings(groupOf(req.user)))));
+app.get('/api/settings', requireUser, wrap(async (req, res) => res.json(await db.getAllSettings(managesAllTeams(req.user) ? null : groupOf(req.user)))));
 
 app.put('/api/settings/:region', requireUser, wrap(async (req, res) => {
   const region = req.params.region;
@@ -215,7 +217,7 @@ app.put('/api/settings/:region', requireUser, wrap(async (req, res) => {
 }));
 
 /* ---------- documents ---------- */
-app.get('/api/docs', requireUser, wrap(async (req, res) => res.json(await db.listDocs(groupOf(req.user)))));
+app.get('/api/docs', requireUser, wrap(async (req, res) => res.json(await db.listDocs(managesAllTeams(req.user) ? null : groupOf(req.user)))));
 
 app.put('/api/docs/:id', requireUser, wrap(async (req, res) => {
   const d = req.body;
@@ -271,7 +273,7 @@ app.get('/api/files/:id', requireUser, wrap(async (req, res) => {
   const f = await db.getFile(req.params.id);
   if (!f) throw fail(404, 'file not found');
   const owner = await db.getDocBranch(f.DocId);
-  if (!owner || !canSeeRegion(req.user, owner)) throw fail(404, 'file not found');
+  if (!owner || !canViewRegion(req.user, owner)) throw fail(404, 'file not found');
   res.set('Content-Type', f.MimeType);
   res.set('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${encodeURIComponent(f.FileName)}"`);
   res.set('Cache-Control', 'private, max-age=86400');

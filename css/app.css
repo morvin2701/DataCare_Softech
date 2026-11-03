@@ -436,6 +436,7 @@ table.list .nowrap { white-space: nowrap; }
 
 .region-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
 .region-tabs button { font-size: 14px; padding: 8px 16px; }
+.region-tabs .tabs-sep { width: 1px; align-self: stretch; margin: 6px 6px; background: var(--border); }
 .region-note { color: #8a6400; background: #fff7da; border-radius: 8px; padding: 6px 12px; font-size: 12.5px; }
 .region-note:empty { display: none; }
 .region-chip { vertical-align: middle; margin-left: 8px; font-size: 12px; background: #fff1e6; color: var(--brand-dark); }
@@ -571,6 +572,7 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
   .region-bar { margin-bottom: 12px; }
   .region-tabs { width: 100%; }
   .region-tabs button { flex: 1; justify-content: center; font-size: 13.5px; padding: 8px 6px; }
+  .region-tabs .tabs-sep { margin: 6px 2px; }
   .region-note { width: 100%; }
   .list-toolbar { padding: 10px; }
   .list-toolbar .tabs { width: 100%; }
