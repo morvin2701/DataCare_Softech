@@ -401,7 +401,17 @@ function newPageEl(d, S) {
  * Lays out the document into A4 pages inside `container` (which must be rendered,
  * i.e. not display:none, so heights can be measured).
  */
+/** Settings as they apply to one branch's documents: a branch may print its own company name, legal name, email and
+    website (Settings → Branches), so India documents carry the Indian company and Dubai documents the UAE one. */
+function brandedFor(S, branch) {
+  const b = (S.branches || {})[branch] || {};
+  const pick = k => String(b[k] || '').trim();
+  if (!pick('companyName') && !pick('legalName') && !pick('email') && !pick('website')) return S;
+  return { ...S, companyName: pick('companyName') || S.companyName, legalName: pick('legalName') || S.legalName, email: pick('email') || S.email, website: pick('website') || S.website };
+}
+
 function renderPages(d, S, container) {
+  S = brandedFor(S, d.branch);
   const premium = S.template !== 'classic';
   const blocks = premium ? buildBlocksPremium(d, S) : buildBlocks(d, S);
 

@@ -776,7 +776,8 @@ async function exportPdf(d) {
   const area = $('#render-area');
   try {
     renderPages(d, SB(d.branch), area);
-    await areaToPdf(area, fileBase(d), { author: SB(d.branch).legalName, creator: SB(d.branch).legalName });
+    const legal = brandedFor(SB(d.branch), d.branch).legalName;
+    await areaToPdf(area, fileBase(d), { author: legal, creator: legal });
     toast(`PDF downloaded – ${d.number}`);
     return true;
   } catch (err) {
@@ -1568,6 +1569,13 @@ function settingsHTML() {
           ${field('Tax label', inp(`branches.${k}.taxLabel`, 'placeholder="VAT / GST"'))}
           ${field('Tax rate %', inp(`branches.${k}.taxRate`, 'type="number" step="any" min="0"'))}
           ${field(regionInfo(k).country === 'India' ? 'GSTIN (optional)' : 'TRN (optional)', inp(`branches.${k}.taxId`), 'Printed in the document footer when filled in')}
+        </div>
+        <div class="branch-sub">Company identity on this branch's documents <small>– leave empty to use the Company section above</small></div>
+        <div class="grid2">
+          ${field('Company name (header)', inp(`branches.${k}.companyName`, `placeholder="${esc(S.companyName || '')}"`), 'Header, footer, receipts and signature blocks of this branch\'s documents')}
+          ${field('Legal name', inp(`branches.${k}.legalName`, `placeholder="${esc(S.legalName || '')}"`))}
+          ${field('Email', inp(`branches.${k}.email`, `type="email" placeholder="${esc(S.email || '')}"`))}
+          ${field('Website', inp(`branches.${k}.website`, `placeholder="${esc(S.website || '')}"`))}
         </div>
       </div>`;
   };

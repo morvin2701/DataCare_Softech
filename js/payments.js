@@ -41,10 +41,10 @@ function applyPaymentStatus(d) {
 /* ---------------- parties ---------------- */
 const inPayRegion = d => !payView.region || d.branch === payView.region;
 
-function partyList() {
+function partyList(within = inPayRegion) {
   const map = new Map();
   for (const d of docs) {
-    if (!inPayRegion(d) || !(d.type === 'order' || d.type === 'invoice') || d.status === 'Cancelled') continue;
+    if (!within(d) || !(d.type === 'order' || d.type === 'invoice') || d.status === 'Cancelled') continue;
     const key = partyKey(d);
     if (!key) continue;
     let p = map.get(key);
@@ -64,6 +64,8 @@ function partyList() {
   return out.sort((a, b) => (b.due - a.due) || a.name.localeCompare(b.name));
 }
 const findParty = key => partyList().find(p => p.key === key) || null;
+/** The party a document belongs to, within that document's own team. */
+const partyOfDoc = d => partyList(x => x.branch === d.branch).find(p => p.key === partyKey(d)) || null;
 const partyDocs = p => [...p.docs, ...p.invoiced];
 
 /** Every receipt of a party: one row per receipt number, with the documents it was split across. */
@@ -324,10 +326,10 @@ async function removeReceipt(party, rc) {
     commitDoc(d); touched.push(d);
   }
   Store.set('dc_docs', docs);
-  await Promise.all(touched.map(d => remotePutDoc(d)));
-  renderPayments();
+  renderPayments();                                   // the page shows the change at once; the database follows
   if ($('#view-docs').classList.contains('active')) renderDocs();
   toast(`Payment ${rc} removed`);
+  await Promise.all(touched.map(d => remotePutDoc(d)));
 }
 
 /* ---------------- messages ---------------- */
@@ -367,13 +369,35 @@ function receiptData(rc) {
     amount: round2(lines.reduce((s, l) => s + l.amount, 0)), lines, partyDueAfter: pm0.partyDueAfter };
 }
 
-function receiptPage(r, S) {
+function receiptPage(r, S0) {
+  const S = brandedFor(S0, r.branch);
   const b = S.branches[r.branch] || branchDefaults(r.branch);
+  const cur = r.cur;
   const brand = S.logo && S.logoHasName
     ? `<img class="rcpt-logo" src="${S.logo}" alt="">`
     : `<div class="rcpt-brand">${S.logo ? `<img src="${S.logo}" alt="">` : ''}<div><div class="rcpt-name">${esc(S.companyName || S.legalName)}</div><div class="rcpt-legal">${esc(S.legalName)}</div></div></div>`;
   const kv = (k, v) => (v ? `<div class="rcpt-kv"><small>${k}</small><b>${esc(v)}</b></div>` : '');
   const taxName = b.taxLabel === 'VAT' ? 'TRN' : 'GSTIN';
+  const today = todayISO();
+
+  // the party's account as on today, and its recent receipts
+  const first = r.lines[0].doc;
+  const party = partyOfDoc(first);
+  const pending = party ? party.docs.filter(d => payFigures(d).due > 0.004) : [];
+  const history = party ? partyLedger(party).filter(x => x.date <= today).slice(0, 5) : [];
+  const pct = party && party.billed > 0 ? Math.min(100, Math.round(party.received / party.billed * 100)) : 0;
+
+  // support box and QR code, as printed on the invoices
+  const sup = S.support || {};
+  const phone = (sup.phone || '').trim() || b.phone || '';
+  const whatsapp = (sup.whatsapp || '').trim() || phone;
+  const waDigits = whatsapp.replace(/\D/g, '');
+  const site = (S.website || '').trim();
+  const target = S.qrTarget || 'whatsapp';
+  const qrUrl = target === 'whatsapp' && waDigits ? 'https://wa.me/' + waDigits : target === 'website' && site ? (/^https?:\/\//i.test(site) ? site : 'https://' + site) : '';
+  const qr = qrUrl && typeof qrImg === 'function' ? qrImg(qrUrl, 'rcpt-qr') : '';
+  const supLine = (k, v) => (v ? `<div><small>${k}</small><b>${esc(v)}</b></div>` : '');
+
   return `<div class="page rcpt" style="--accent:${esc(S.accent || '#E8772E')}">
     <div class="rcpt-bar"></div>
     <div class="rcpt-head">
@@ -381,24 +405,61 @@ function receiptPage(r, S) {
         <div class="rcpt-contact">${[b.address, b.phone, S.email, S.website, b.taxId ? `${taxName}: ${b.taxId}` : ''].filter(Boolean).map(esc).join('<span>·</span>')}</div></div>
       <div class="rcpt-title"><h1>PAYMENT RECEIPT</h1>
         <div class="rcpt-meta"><span>Receipt No.</span><b>${esc(r.rc)}</b></div>
-        <div class="rcpt-meta"><span>Date</span><b>${esc(fmtDate(r.date))}</b></div></div>
+        <div class="rcpt-meta"><span>Date</span><b>${esc(fmtDate(r.date))}</b></div>
+        <div class="rcpt-meta"><span>Branch</span><b>${esc(b.label || regionName(r.branch))}</b></div></div>
     </div>
+
     <div class="rcpt-from">
       <div class="rcpt-box"><small>Received with thanks from</small><div class="rcpt-party">${esc(r.party.name)}</div>
         <div class="rcpt-party-s">${[r.party.address, r.party.city].filter(Boolean).map(esc).join(', ')}${r.party.mobile ? `${r.party.address || r.party.city ? '<br>' : ''}Mobile: ${esc(r.party.mobile)}` : ''}${r.party.taxId ? `<br>${taxName}: ${esc(r.party.taxId)}` : ''}</div></div>
-      <div class="rcpt-box rcpt-amount"><small>Amount received</small><b>${money(r.amount, r.cur)}</b><div class="rcpt-words">${esc(amountInWords(r.amount, r.cur))}</div></div>
+      <div class="rcpt-box rcpt-amount"><small>Amount received</small><b>${money(r.amount, cur)}</b><div class="rcpt-words">${esc(amountInWords(r.amount, cur))}</div></div>
     </div>
-    <div class="rcpt-grid">${kv('Payment mode', r.mode)}${kv('Reference', r.ref)}${kv('Received by', r.by)}${kv('Note', r.note)}</div>
-    <table>
-      <thead><tr><th>Against document</th><th>Date</th><th class="amt">Document total</th><th class="amt">This payment</th><th class="amt">Received to date</th><th class="amt">Balance due</th></tr></thead>
-      <tbody>${r.lines.map(l => `<tr><td><b>${esc(l.doc.number)}</b><br><span class="rcpt-dim">${kindOf(l.doc.type).title}</span></td><td>${esc(fmtDate(l.doc.date))}</td><td class="amt">${amt(l.total, r.cur)}</td><td class="amt">${amt(l.amount, r.cur)}</td><td class="amt">${amt(Math.max(0, l.total - l.balanceAfter), r.cur)}</td><td class="amt">${l.balanceAfter > 0.004 ? amt(l.balanceAfter, r.cur) : 'Nil'}</td></tr>`).join('')}
-      <tr class="tot"><td colspan="3">Total received by this receipt</td><td class="amt">${amt(r.amount, r.cur)}</td><td colspan="2"></td></tr></tbody>
+    <div class="rcpt-grid">${kv('Payment mode', r.mode)}${kv('Reference', r.ref || '—')}${kv('Received on', fmtDate(r.date))}${kv('Received by', r.by)}${kv('Note', r.note)}</div>
+
+    <div class="rcpt-h">Applied to</div>
+    <table class="applied"><colgroup><col style="width:27%"><col style="width:13%"><col style="width:15%"><col style="width:14%"><col style="width:15%"><col style="width:16%"></colgroup>
+      <thead><tr><th>Document</th><th>Date</th><th class="amt">Document total</th><th class="amt">This payment</th><th class="amt">Received to date</th><th class="amt">Balance due</th></tr></thead>
+      <tbody>${r.lines.map(l => `<tr><td><b>${esc(l.doc.number)}</b><br><span class="rcpt-dim">${kindOf(l.doc.type).title}</span></td><td>${esc(fmtDate(l.doc.date))}</td><td class="amt">${amt(l.total, cur)}</td><td class="amt">${amt(l.amount, cur)}</td><td class="amt">${amt(Math.max(0, l.total - l.balanceAfter), cur)}</td><td class="amt ${l.balanceAfter > 0.004 ? 'due' : 'ok'}">${l.balanceAfter > 0.004 ? amt(l.balanceAfter, cur) : 'Nil'}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="3">Total received by this receipt</td><td class="amt">${amt(r.amount, cur)}</td><td colspan="2" class="amt wrap">${r.partyDueAfter !== undefined ? `Balance due after this payment<br><b>${r.partyDueAfter > 0.004 ? money(r.partyDueAfter, cur) : 'Nil'}</b>` : ''}</td></tr></tbody>
     </table>
-    ${r.partyDueAfter !== undefined ? `<div class="rcpt-due"><div><small>Balance due from ${esc(r.party.name)} after this payment</small><b>${r.partyDueAfter > 0.004 ? money(r.partyDueAfter, r.cur) : 'Nil – fully paid'}</b></div></div>` : ''}
-    <div class="rcpt-note">${r.mode === 'Cheque' ? 'Subject to realisation of the cheque. ' : ''}This is a computer-generated receipt from ${esc(S.legalName)}. Please keep it for your records.</div>
-    <div class="rcpt-foot">
-      <div>Thank you for your payment.<br>For support, call ${esc(b.phone || '')}.</div>
-      <div class="rcpt-sign">${S.stamp ? `<img src="${S.stamp}" alt="">` : '<div class="rcpt-sign-space"></div>'}<div class="line">For ${esc(S.legalName)}<br><span>Authorised Signatory</span></div></div>
+
+    ${party ? `<div class="rcpt-two">
+      <div class="rcpt-box rcpt-acct">
+        <small>Account summary – ${esc(r.party.name)} · as on ${esc(fmtDate(today))}</small>
+        <div class="rcpt-acct-row"><span>Billed to date</span><b>${money(party.billed, cur)}</b></div>
+        <div class="rcpt-acct-row"><span>Received to date</span><b class="ok">${money(party.received, cur)}</b></div>
+        <div class="rcpt-acct-row total"><span>Balance due</span><b class="${party.due > 0.004 ? 'due' : 'ok'}">${party.due > 0.004 ? money(party.due, cur) : 'Nil'}</b></div>
+        <div class="rcpt-prog"><i style="width:${pct}%"></i></div><div class="rcpt-dim">${pct}% of the billed amount received</div>
+      </div>
+      <div class="rcpt-box rcpt-hist">
+        <small>Recent payments</small>
+        <table class="mini"><tbody>${history.map(h => `<tr class="${h.receipt === r.rc ? 'this' : ''}"><td>${esc(fmtDate(h.date))}</td><td>${esc(h.receipt || 'Advance')}</td><td>${esc(h.mode || '')}</td><td class="amt">${amt(h.amount, cur)}</td></tr>`).join('') || '<tr><td colspan="4" class="rcpt-dim">This is the first payment.</td></tr>'}</tbody></table>
+      </div>
+    </div>
+    <div class="rcpt-h">${pending.length ? `Outstanding documents · as on ${esc(fmtDate(today))}` : 'Account status'}</div>
+    ${pending.length ? `<table class="pend"><colgroup><col style="width:34%"><col style="width:14%"><col style="width:17%"><col style="width:17%"><col style="width:18%"></colgroup>
+      <thead><tr><th>Document</th><th>Date</th><th class="amt">Total</th><th class="amt">Received</th><th class="amt">Balance due</th></tr></thead>
+      <tbody>${pending.slice(0, 5).map(d => { const f = payFigures(d); return `<tr><td><b>${esc(d.number)}</b> <span class="rcpt-dim">${kindOf(d.type).title}</span></td><td>${esc(fmtDate(d.date))}</td><td class="amt">${amt(f.total, d.currency)}</td><td class="amt">${amt(f.received, d.currency)}</td><td class="amt due">${amt(f.due, d.currency)}</td></tr>`; }).join('')}
+      ${pending.length > 5 ? `<tr><td colspan="5" class="rcpt-dim">and ${pending.length - 5} more document${pending.length - 5 === 1 ? '' : 's'}</td></tr>` : ''}</tbody></table>`
+      : `<div class="rcpt-clear">✓ All documents of ${esc(r.party.name)} are fully paid. Thank you!</div>`}` : ''}
+
+    <div class="rcpt-bottom">
+      <div class="rcpt-support">
+        <div class="rcpt-sup-txt">
+          <small>Need help?</small>
+          <div class="rcpt-sup-grid">
+            ${waDigits && waDigits !== phone.replace(/\D/g, '') ? supLine('Call us', phone) + supLine('WhatsApp', whatsapp) : supLine('Call / WhatsApp', phone)}
+            ${supLine('Working hours', (sup.hours || '').trim())}
+            ${supLine('Email', (S.email || '').trim())}
+          </div>
+          <div class="rcpt-note">${r.mode === 'Cheque' ? 'Subject to realisation of the cheque. ' : ''}This is a computer-generated receipt from ${esc(S.legalName)}; please quote the receipt number in any correspondence.</div>
+        </div>
+        ${qr ? `<div class="rcpt-qrbox">${qr}<b>Scan to ${target === 'website' ? 'visit' : 'chat'}</b></div>` : ''}
+      </div>
+      <div class="rcpt-foot">
+        <div class="rcpt-thanks">Thank you for your payment.<br>${esc(S.companyName || S.legalName)}${b.address ? ` · ${esc(b.address)}` : ''}</div>
+        <div class="rcpt-sign">${S.stamp ? `<img src="${S.stamp}" alt="">` : '<div class="rcpt-sign-space"></div>'}<div class="line">For ${esc(S.legalName)}<br><span>Authorised Signatory</span></div></div>
+      </div>
     </div>
   </div>`;
 }

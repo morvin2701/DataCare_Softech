@@ -907,3 +907,5 @@ a.icon-act { text-decoration: none; display: inline-grid; place-items: center; }
   .pay-sec { padding: 12px 14px 6px; }
   table.pay-docs .acts, table.pay-ledger .acts { justify-content: flex-start; }
 }
+.branch-sub { margin: 16px 0 8px; font-size: 12.5px; font-weight: 700; color: var(--brand-dark); }
+.branch-sub small { font-weight: 500; color: var(--muted); }
