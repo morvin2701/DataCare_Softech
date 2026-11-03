@@ -821,3 +821,89 @@ table.list .empty { padding: 26px; text-align: center; color: var(--muted); }
 .team-sep { margin: 30px 0 12px; padding-top: 18px; border-top: 1px dashed var(--border); }
 .team-sep h3 { margin: 0 0 4px; font-size: 16px; }
 .team-sep .page-sub { margin: 0; }
+
+/* ===== Payments page ===== */
+.pay-grid { display: grid; grid-template-columns: minmax(290px, 370px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pay-parties .list-toolbar { gap: 8px; }
+.pay-parties .filters, .pay-parties .search { width: 100%; }
+.party-list { max-height: calc(100vh - 330px); min-height: 200px; overflow: auto; }
+.party { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #eef0f4; cursor: pointer; transition: background .12s; }
+.party:last-child { border-bottom: 0; }
+.party:hover, .party:focus { background: #fff9f4; outline: none; }
+.party.on { background: #fff6ee; box-shadow: inset 3px 0 0 var(--brand); }
+.party-txt { min-width: 0; }
+.party-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-sub { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.party-due { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; color: #b4561b; flex: none; }
+.party-due small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+.party-due.ok { color: #1f7a42; }
+.overdue { color: #a52f2f; }
+.empty-state.small { padding: 34px 16px; }
+.empty-state.small h3 { font-size: 15px; }
+.pay-empty .empty-state { padding: 70px 24px; }
+.pay-empty-ic { width: 54px; height: 54px; border-radius: 16px; background: #fff1e6; color: var(--brand-dark); display: grid; place-items: center; margin: 0 auto 14px; }
+.pay-empty-ic .ico { width: 26px; height: 26px; }
+.pay-top { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.pay-card { overflow: hidden; }
+.pay-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; padding: 18px 20px 16px; border-bottom: 1px solid var(--border); }
+.pay-head h3 { margin: 0; font-size: 19px; color: var(--text); letter-spacing: -.2px; }
+.pay-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.pay-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pay-actions .btn .ico { display: inline-block; width: 16px; height: 16px; margin-right: 5px; vertical-align: -3px; }
+.chip.warn { background: #fff7da; color: #8a6400; }
+.pay-kpis { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--border); background: #fafbfc; }
+.pay-kpi { padding: 14px 20px; border-right: 1px solid var(--border); min-width: 0; }
+.pay-kpi:last-child { border-right: 0; }
+.pay-kpi small { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+.pay-kpi b { display: block; font-size: 21px; font-weight: 700; letter-spacing: -.3px; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pay-kpi b.got { color: #1f7a42; }
+.pay-kpi.due b { color: #b4561b; }
+.pay-kpi.due.clear b { color: #1f7a42; }
+.pay-kpi-s { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.pay-progress { height: 6px; background: #e9ecf1; border-radius: 3px; overflow: hidden; margin-top: 9px; }
+.pay-progress i { display: block; height: 100%; background: #23884a; border-radius: 3px; }
+.pay-sec { padding: 16px 20px 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; display: flex; align-items: center; gap: 8px; }
+.pay-count { background: #f1f3f7; color: #505a6d; border-radius: 10px; padding: 0 7px; font-size: 11.5px; line-height: 18px; }
+.pay-none { padding: 6px 20px 22px; color: var(--muted); font-size: 13.5px; }
+table.pay-docs td.due, table.pay-ledger td.due { color: #b4561b; font-weight: 700; }
+table.pay-docs td.clear { color: #1f7a42; font-weight: 600; }
+table.list tr.muted-row td { opacity: .6; }
+table.pay-docs tbody tr, table.pay-ledger tbody tr { cursor: default; }
+table.pay-docs tbody tr[data-open-doc] { cursor: pointer; }
+a.icon-act { text-decoration: none; display: inline-grid; place-items: center; }
+.muted.small { font-size: 12.5px; }
+@media (max-width: 960px) {
+  .pay-grid { grid-template-columns: 1fr; }
+  .party-list { max-height: 46vh; }
+  /* phone: one figure per line, label left and amount right, nothing cut off */
+  .pay-kpis { grid-template-columns: 1fr; }
+  .pay-kpi { padding: 10px 14px; border-right: 0; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: auto 1fr; column-gap: 12px; align-items: baseline; }
+  .pay-kpi:last-child { border-bottom: 0; }
+  .pay-kpi b { font-size: 17px; margin-top: 0; text-align: right; white-space: normal; }
+  .pay-kpi .pay-kpi-s, .pay-kpi .pay-progress { grid-column: 1 / -1; }
+  .pay-kpi-s { margin-top: 2px; }
+  .pay-progress { margin-top: 6px; }
+  table.pay-docs tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "doc status" "date date" "total total" "received received" "due due" "acts acts"; row-gap: 4px; }
+  table.pay-docs td:nth-child(1) { grid-area: doc; }
+  table.pay-docs td:nth-child(2) { grid-area: date; font-size: 12.5px; color: var(--muted); }
+  table.pay-docs td:nth-child(3) { grid-area: total; }
+  table.pay-docs td:nth-child(4) { grid-area: received; }
+  table.pay-docs td:nth-child(5) { grid-area: due; }
+  table.pay-docs td:nth-child(6) { grid-area: status; justify-self: end; }
+  table.pay-docs td:nth-child(7) { grid-area: acts; }
+  table.pay-docs td[data-l] { display: flex; justify-content: space-between; gap: 10px; text-align: right; }
+  table.pay-docs td[data-l]::before { content: attr(data-l); color: var(--muted); font-weight: 600; font-size: 12px; text-align: left; }
+  table.pay-docs td[data-l="Date"]::before { display: none; }
+  table.pay-ledger tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "date amount" "mode mode" "against against" "acts acts"; row-gap: 4px; }
+  table.pay-ledger td:nth-child(1) { grid-area: date; }
+  table.pay-ledger td:nth-child(2) { grid-area: amount; text-align: right; }
+  table.pay-ledger td:nth-child(3) { grid-area: mode; }
+  table.pay-ledger td:nth-child(4) { grid-area: against; }
+  table.pay-ledger td:nth-child(5) { grid-area: acts; }
+  table.pay-ledger .cell-main, table.pay-ledger .cell-sub, table.pay-docs .cell-main, table.pay-docs .cell-sub { white-space: normal; }
+  .pay-head { padding: 14px 14px 12px; }
+  .pay-actions { width: 100%; }
+  .pay-actions .btn { flex: 1; justify-content: center; }
+  .pay-sec { padding: 12px 14px 6px; }
+  table.pay-docs .acts, table.pay-ledger .acts { justify-content: flex-start; }
+}

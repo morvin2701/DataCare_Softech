@@ -153,7 +153,7 @@ function newDoc(type, branch) {
     notes: '', hardware: defaultHardware(type),
     terms: [...(S.terms[type] || S.terms.invoice)], amcPercent: S.amcPercent, amcMode: S.amcMode || 'percent', amcAmount: S.amcAmount || 0,
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
-    showStamp: false, payment: { date: '', mode: '', ref: '' },
+    showStamp: false, payment: { date: '', mode: '', ref: '' }, payments: [],
     installDate: '', paymentTerms: '',
     employee: (USER && USER.displayName) || '', history: [],
     ...typeDefaults(type)
@@ -173,6 +173,7 @@ function normalizeDoc(d) {
   if (d.paymentTerms === undefined) d.paymentTerms = '';
   if (d.employee === undefined) d.employee = d.createdBy || '';
   if (!Array.isArray(d.history)) d.history = [];
+  if (!Array.isArray(d.payments)) d.payments = [];   // payments recorded on the Payments page
   if (d.type === 'order' && ['Confirmed', 'In Progress', 'Installed'].includes(d.status)) d.status = d.status === 'Installed' ? 'Completed' : 'Pending';   // statuses renamed
   if (d.edition === undefined) d.edition = '';
   if (!Array.isArray(d.compHideCols)) d.compHideCols = [];
@@ -464,7 +465,9 @@ function updateSum() {
   else {
     const ord = doc.type === 'order';
     h += line(ord ? 'Total order value' : 'Total payable', t.total, 't');
-    if (t.adv) h += line('Advance', t.adv) + line(ord ? 'Balance payable' : 'Balance due', t.balance, 't');
+    if (t.advance) h += line('Advance', t.advance);
+    if (t.payments) h += line('Payments received', t.payments);
+    if (t.adv) h += line(ord ? 'Balance payable' : 'Balance due', t.balance, 't');
   }
   $('#sumBox').innerHTML = h;
 }
@@ -747,14 +750,12 @@ async function loadLibs() {
   if (!window.jspdf) await loadScript('js/vendor/jspdf.umd.min.js').catch(() => loadScript(CDN.jspdf));
 }
 
-/** Renders any document to a PDF file. Returns true on success. */
-async function exportPdf(d) {
-  const area = $('#render-area');
+/** Turns the .page elements rendered in an area into one A4 PDF download. */
+async function areaToPdf(area, fileName, meta = {}) {
+  await loadLibs();
+  await waitAssets(area);
+  Object.assign(area.style, { left: '0px', zIndex: '-1' });
   try {
-    await loadLibs();
-    renderPages(d, SB(d.branch), area);
-    await waitAssets(area);
-    Object.assign(area.style, { left: '0px', zIndex: '-1' });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
     const pages = $$('.page', area);
@@ -763,8 +764,19 @@ async function exportPdf(d) {
       if (i) pdf.addPage();
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.93), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
     }
-    pdf.setProperties({ title: fileBase(d), author: SB(d.branch).legalName, creator: SB(d.branch).legalName });
-    pdf.save(fileBase(d) + '.pdf');
+    pdf.setProperties({ title: fileName, ...meta });
+    pdf.save(fileName + '.pdf');
+  } finally {
+    Object.assign(area.style, { left: '', zIndex: '' });
+  }
+}
+
+/** Renders any document to a PDF file. Returns true on success. */
+async function exportPdf(d) {
+  const area = $('#render-area');
+  try {
+    renderPages(d, SB(d.branch), area);
+    await areaToPdf(area, fileBase(d), { author: SB(d.branch).legalName, creator: SB(d.branch).legalName });
     toast(`PDF downloaded – ${d.number}`);
     return true;
   } catch (err) {
@@ -773,7 +785,6 @@ async function exportPdf(d) {
     return false;
   } finally {
     area.innerHTML = '';
-    Object.assign(area.style, { left: '', zIndex: '' });
   }
 }
 
@@ -814,7 +825,8 @@ const ICONS = {
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="3"/><path d="M16 15.5a6 6 0 0 1 6 4.5"/>',
   ban: '<circle cx="12" cy="12" r="9"/><path d="M6 6l12 12"/>',
   check: '<path d="M5 12l5 5L20 7"/>',
-  upload: '<path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>'
+  upload: '<path d="M12 16V5"/><path d="M7 10l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  wa: '<path d="M4.5 20l1.2-3.6A8 8 0 1 1 8.7 19L4.5 20z"/><path d="M9.3 9.2c.2 2.3 2.3 4.4 4.6 4.6l1.1-1.1 1.9.8c-.2 1.2-1.2 1.9-2.4 1.8a6.6 6.6 0 0 1-5.8-5.8c-.1-1.2.6-2.2 1.8-2.4l.8 1.9-1.1 1.1z"/>'
 };
 const icon = (name, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -852,14 +864,17 @@ function filteredDocs() {
     .sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * docsView.dir; });
 }
 
-function renderRegionTabs() {
-  const el = $('#regionTabs');
-  const n = r => docs.filter(d => !r || d.branch === r).length;
-  const tab = (r, label) => `<button type="button" data-region="${r}" class="${docsView.region === r ? 'on' : ''}">${label} <span>${n(r)}</span></button>`;
+/** Team tabs for a list page: this group's teams, then (for owner administrators) the separate teams after a divider. */
+function regionTabsHTML(current, count) {
+  const tab = (r, label) => `<button type="button" data-region="${r}" class="${current === r ? 'on' : ''}">${label} <span>${count(r)}</span></button>`;
   const label = c => `${regionInfo(c).flag || ''} ${esc(regionLong(c))}`.trim();
   const sep = separateCodes();
-  el.innerHTML = (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, label(c))).join('')
+  return (REGION ? '' : tab('', 'All')) + regionCodes().map(c => tab(c, label(c))).join('')
     + (sep.length ? `<span class="tabs-sep" aria-hidden="true"></span>` + sep.map(c => tab(c, label(c))).join('') : '');
+}
+
+function renderRegionTabs() {
+  $('#regionTabs').innerHTML = regionTabsHTML(docsView.region, r => docs.filter(d => !r || d.branch === r).length);
   const r = docsView.region;
   const other = REGION && r && r !== REGION && (!isAdmin() || !regionCodes().includes(r));
   $('#regionNote').textContent = other ? `You are viewing the documents of ${theTeam(r)}. They open as view only.` : '';
@@ -971,7 +986,7 @@ function renderDocs() {
         <td><span class="chip">${esc(regionName(d.branch))}</span></td>
         <td class="num">
           <div class="cell-main">${fmtMoney(t.total, d.currency, false)}${Number.isInteger(t.total) ? '.00' : ''} <small>${esc(d.currency)}</small></div>
-          ${t.adv && d.type !== 'quotation' && d.status !== 'Paid' ? `<div class="cell-sub">Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
+          ${t.adv && d.type !== 'quotation' && d.status !== 'Paid' ? `<div class="cell-sub">Received ${fmtMoney(t.adv, d.currency, false)} · Balance ${fmtMoney(t.balance, d.currency, false)}</div>` : ''}
         </td>
         <td>${statusSel(d)}${d.type === 'order' && d.history && d.history.length ? (() => { const h = d.history[d.history.length - 1]; return `<div class="cell-sub">${esc(h.by || d.employee || '')} · <span title="${esc(fmtDateTime(h.at))}">${esc(timeAgo(h.at))}</span>${d.signedFile ? ' · ✓ signed' : ''}</div>`; })() : (d.employee ? `<div class="cell-sub">${esc(d.employee)}</div>` : '')}</td>
         <td class="act-col"><div class="acts">${editable ? `
@@ -999,7 +1014,7 @@ function copyAsNew(src, type) {
     id: uid(), type, autoNumber: true, numberAssigned: false, number: '',
     date: todayISO(), status: STATUSES[type][0], createdAt: undefined, updatedAt: undefined,
     payment: { date: '', mode: '', ref: '' },
-    employee: (USER && USER.displayName) || src.employee || '', history: [], signedFile: null
+    employee: (USER && USER.displayName) || src.employee || '', history: [], signedFile: null, payments: [], fromOrderId: undefined
   });
   if (type !== src.type) {
     Object.assign(d, {
@@ -1010,8 +1025,12 @@ function copyAsNew(src, type) {
     if (src.type === 'quotation') Object.assign(d, { fromQuotation: src.number, fromQuotationId: src.id });
     if (src.type === 'order') {
       d.fromOrder = src.number;
-      // an advance taken with the order carries over to the invoice
-      if (type === 'invoice' && Number(src.advance) > 0) { d.payment = clone(src.payment || {}); d.status = 'Partially Paid'; }
+      d.fromOrderId = src.id;
+      // what was already received on the order (advance and recorded payments) carries over to its invoice
+      if (type === 'invoice') {
+        d.payments = clone(src.payments || []);
+        if (Number(src.advance) > 0 || d.payments.length) { d.payment = clone(src.payment || {}); applyPaymentStatus(d); }
+      }
     }
   }
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
@@ -1022,7 +1041,7 @@ function exportCsv() {
   const list = filteredDocs();
   if (!list.length) { toast('Nothing to export', true); return; }
   const cols = ['Number', 'Type', 'Date', 'Branch', 'Company', 'Contact', 'City', 'Country', 'Mobile', 'Email',
-    'Currency', 'Sub Total', 'Discount', 'Tax', 'Total', 'Advance', 'Balance', 'Status', 'From Quotation'];
+    'Currency', 'Sub Total', 'Discount', 'Tax', 'Total', 'Received', 'Balance', 'Status', 'From Quotation'];
   const cell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = list.map(d => {
     const t = docTotals(d), c = d.customer;
@@ -1201,7 +1220,7 @@ async function openSignedFile(fileId, name = '') {
 }
 
 /* ----- activity panel in the editor ----- */
-const ACTION_LABEL = { created: 'Created', status: 'Status changed', upload: 'Signed copy uploaded' };
+const ACTION_LABEL = { created: 'Created', status: 'Status changed', upload: 'Signed copy uploaded', payment: 'Payment received', 'payment-removed': 'Payment removed' };
 function historyHTML(d) {
   const items = [...(d.history || [])].reverse();
   const sf = d.signedFile;
@@ -1903,6 +1922,7 @@ function showView(v) {
   closeNewSheet();
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   if (v === 'docs') renderDocs();
+  if (v === 'payments') renderPayments();
   if (v === 'settings') {
     loadSettingsForm();
     if (teamContacts === null && API.online && USER) {
@@ -2085,7 +2105,7 @@ function formDialog({ title, fields, ok = 'Save', submit }) {
       ? `<select name="${f.name}">${f.options.map(([v, l]) => opt(v, l, f.value)).join('')}</select>`
       : f.type === 'file'
         ? `<span class="file-pick"><input name="${f.name}" type="file"${f.accept ? ` accept="${f.accept}"` : ''}><span class="file-pick-ui"><b>Choose file</b><small>PDF or photo</small></span></span>`
-        : `<input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''} autocomplete="${f.autocomplete || 'off'}">`
+        : `<input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}"${f.required ? ' required' : ''}${f.minlength ? ` minlength="${f.minlength}"` : ''}${f.placeholder ? ` placeholder="${esc(f.placeholder)}"` : ''}${f.step ? ` step="${esc(f.step)}"` : ''}${f.min !== undefined ? ` min="${esc(f.min)}"` : ''}${f.max !== undefined ? ` max="${esc(f.max)}"` : ''}${f.inputmode ? ` inputmode="${esc(f.inputmode)}"` : ''} autocomplete="${f.autocomplete || 'off'}">`
   }${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>`).join('');
   err.hidden = true;
   return new Promise(resolve => {
@@ -2261,6 +2281,7 @@ async function init() {
   bindDocs();
   bindSettings();
   bindTeam();
+  bindPayments();
   bindLogin();
   bindUserMenu();
 

@@ -177,7 +177,7 @@ function buildBlocksPremium(d, S) {
   } else {
     tot += `<div class="p-grand"><span>${isOrder ? 'Total Order Value' : 'Total Payable'}</span><b>${esc(cur)} ${pMoney(T.total, cur)}</b></div>`;
     if (T.adv) {
-      tot += tr('Advance Received', '− ' + pMoney(T.adv, cur), 'adv');
+      tot += tr(receivedTitle(d), '− ' + pMoney(T.adv, cur), 'adv');
       tot += `<div class="p-balance"><span>${isOrder ? 'Balance Payable' : 'Balance Due'}</span><b>${esc(cur)} ${pMoney(T.balance, cur)}</b></div>`;
     }
   }

@@ -89,13 +89,16 @@ function qrImg(text, cls) {
  * - payment: only on invoices that are Paid (or Partially Paid with an advance)
  * - support + qr: when "Show support details & QR code" is on (default: invoices)
  */
+/** "Advance Received" while only the upfront advance exists; "Payment Received" once payments were recorded. */
+const receivedTitle = d => ((d.payments || []).length ? 'Payment Received' : 'Advance Received');
+
 function infoSection(d, S) {
   const T = docTotals(d);
   const pay = d.payment || {};
   let payment = null;
   if (isPaidInvoice(d)) payment = { title: 'Payment Received', amount: T.total, note: 'Paid in full. Thank you for your payment.' };
-  else if (d.type === 'invoice' && d.status === 'Partially Paid' && T.adv) payment = { title: 'Advance Received', amount: T.adv, balance: T.balance };
-  else if (d.type === 'order' && T.adv && d.status !== 'Cancelled') payment = { title: 'Advance Received', amount: T.adv, balance: T.balance };
+  else if (d.type === 'invoice' && d.status === 'Partially Paid' && T.adv) payment = { title: receivedTitle(d), amount: T.adv, balance: T.balance };
+  else if (d.type === 'order' && T.adv && d.status !== 'Cancelled') payment = { title: receivedTitle(d), amount: T.adv, balance: T.balance };
   if (payment) Object.assign(payment, { date: pay.date || '', mode: pay.mode || '', ref: pay.ref || '' });
 
   const on = d.showSupport === undefined ? d.type === 'invoice' : !!d.showSupport;
@@ -169,8 +172,10 @@ function docTotals(d) {
   const taxable = round2(sub - disc);
   const tax = d.taxEnabled ? round2(taxable * (Number(d.taxRate) || 0) / 100) : 0;
   const total = round2(taxable + tax);
-  const adv = round2(d.advance);
-  return { sub, disc, tax, total, adv, balance: round2(total - adv) };
+  const advance = round2(d.advance);                                                               // typed on the document
+  const payments = round2((d.payments || []).reduce((s, p) => s + (Number(p.amount) || 0), 0));   // recorded on the Payments page
+  const adv = round2(advance + payments);                                                          // everything received so far
+  return { sub, disc, tax, total, advance, payments, adv, balance: round2(total - adv) };
 }
 
 /** Splits "Title: text" into its two parts; lines without a short title return { title: '' }. */
@@ -302,7 +307,7 @@ function buildBlocks(d, S) {
   } else {
     tot += `<tr class="total"><td>${d.type === 'order' ? 'Total Order Value' : 'Total Payable Amount'}:</td><td class="amt">${fmtMoney(T.total, cur)}</td></tr>`;
     if (T.adv) {
-      tot += `<tr class="sub"><td>Advance Received:</td><td class="amt">${fmtMoney(T.adv, cur)}</td></tr>`;
+      tot += `<tr class="sub"><td>${receivedTitle(d)}:</td><td class="amt">${fmtMoney(T.adv, cur)}</td></tr>`;
       tot += `<tr class="total"><td>${d.type === 'order' ? 'Balance Payable' : 'Balance Due'}:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
     }
   }
