@@ -416,12 +416,12 @@ function receiptPage(r, S0) {
     </div>
     <div class="rcpt-grid">${kv('Payment mode', r.mode)}${kv('Reference', r.ref || '—')}${kv('Received on', fmtDate(r.date))}${kv('Received by', r.by)}${kv('Note', r.note)}</div>
 
-    <div class="rcpt-h">Applied to</div>
+    <div class="rcpt-sec"><div class="rcpt-h">Applied to</div>
     <table class="applied"><colgroup><col style="width:27%"><col style="width:13%"><col style="width:15%"><col style="width:14%"><col style="width:15%"><col style="width:16%"></colgroup>
       <thead><tr><th>Document</th><th>Date</th><th class="amt">Document total</th><th class="amt">This payment</th><th class="amt">Received to date</th><th class="amt">Balance due</th></tr></thead>
       <tbody>${r.lines.map(l => `<tr><td><b>${esc(l.doc.number)}</b><br><span class="rcpt-dim">${kindOf(l.doc.type).title}</span></td><td>${esc(fmtDate(l.doc.date))}</td><td class="amt">${amt(l.total, cur)}</td><td class="amt">${amt(l.amount, cur)}</td><td class="amt">${amt(Math.max(0, l.total - l.balanceAfter), cur)}</td><td class="amt ${l.balanceAfter > 0.004 ? 'due' : 'ok'}">${l.balanceAfter > 0.004 ? amt(l.balanceAfter, cur) : 'Nil'}</td></tr>`).join('')}
       <tr class="tot"><td colspan="3">Total received by this receipt</td><td class="amt">${amt(r.amount, cur)}</td><td colspan="2" class="amt wrap">${r.partyDueAfter !== undefined ? `Balance due after this payment<br><b>${r.partyDueAfter > 0.004 ? money(r.partyDueAfter, cur) : 'Nil'}</b>` : ''}</td></tr></tbody>
-    </table>
+    </table></div>
 
     ${party ? `<div class="rcpt-two">
       <div class="rcpt-box rcpt-acct">
