@@ -436,12 +436,12 @@ function receiptPage(r, S0) {
         <table class="mini"><tbody>${history.map(h => `<tr class="${h.receipt === r.rc ? 'this' : ''}"><td>${esc(fmtDate(h.date))}</td><td>${esc(h.receipt || 'Advance')}</td><td>${esc(h.mode || '')}</td><td class="amt">${amt(h.amount, cur)}</td></tr>`).join('') || '<tr><td colspan="4" class="rcpt-dim">This is the first payment.</td></tr>'}</tbody></table>
       </div>
     </div>
-    <div class="rcpt-h">${pending.length ? `Outstanding documents · as on ${esc(fmtDate(today))}` : 'Account status'}</div>
+    <div class="rcpt-pend"><div class="rcpt-h">${pending.length ? `Outstanding documents · as on ${esc(fmtDate(today))}` : 'Account status'}</div>
     ${pending.length ? `<table class="pend"><colgroup><col style="width:34%"><col style="width:14%"><col style="width:17%"><col style="width:17%"><col style="width:18%"></colgroup>
       <thead><tr><th>Document</th><th>Date</th><th class="amt">Total</th><th class="amt">Received</th><th class="amt">Balance due</th></tr></thead>
       <tbody>${pending.slice(0, 5).map(d => { const f = payFigures(d); return `<tr><td><b>${esc(d.number)}</b> <span class="rcpt-dim">${kindOf(d.type).title}</span></td><td>${esc(fmtDate(d.date))}</td><td class="amt">${amt(f.total, d.currency)}</td><td class="amt">${amt(f.received, d.currency)}</td><td class="amt due">${amt(f.due, d.currency)}</td></tr>`; }).join('')}
       ${pending.length > 5 ? `<tr><td colspan="5" class="rcpt-dim">and ${pending.length - 5} more document${pending.length - 5 === 1 ? '' : 's'}</td></tr>` : ''}</tbody></table>`
-      : `<div class="rcpt-clear">✓ All documents of ${esc(r.party.name)} are fully paid. Thank you!</div>`}` : ''}
+      : `<div class="rcpt-clear">✓ All documents of ${esc(r.party.name)} are fully paid. Thank you!</div>`}</div>` : ''}
 
     <div class="rcpt-bottom">
       <div class="rcpt-support">
@@ -464,12 +464,39 @@ function receiptPage(r, S0) {
   </div>`;
 }
 
-async function exportReceipt(rc) {
+/** The page is one fixed A4 sheet: when a long party name, address or many documents make the content taller than the
+    sheet, spacing is tightened first, then the optional sections give way (recent payments, outstanding documents,
+    support box) – so the amount, the applied-to table and the signature are never cut off. */
+function fitReceipt(page) {
+  const over = () => page.scrollHeight > page.clientHeight + 1;
+  if (!over()) return 'full';
+  page.classList.add('tight');
+  if (!over()) return 'tight';
+  const hist = page.querySelector('.rcpt-hist');
+  if (hist) { hist.remove(); const two = page.querySelector('.rcpt-two'); if (two) two.classList.add('one'); }
+  if (!over()) return 'no-history';
+  const pend = page.querySelector('.rcpt-pend');
+  if (pend) pend.remove();
+  if (!over()) return 'no-outstanding';
+  const sup = page.querySelector('.rcpt-support');
+  if (sup) sup.remove();
+  return over() ? 'overflow' : 'minimal';
+}
+
+/** Renders a receipt into an area (offscreen) and fits it to the sheet. Returns the receipt data, or null. */
+function renderReceipt(rc, area) {
   const r = receiptData(rc);
-  if (!r) { toast('Receipt not found', true); return false; }
+  if (!r) return null;
+  area.innerHTML = receiptPage(r, SB(r.branch));
+  r.fit = fitReceipt(area.querySelector('.page'));
+  return r;
+}
+
+async function exportReceipt(rc) {
   const area = $('#render-area');
   try {
-    area.innerHTML = receiptPage(r, SB(r.branch));
+    const r = renderReceipt(rc, area);
+    if (!r) { toast('Receipt not found', true); return false; }
     const clean = s => String(s || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
     await areaToPdf(area, `${clean(r.party.name).toUpperCase() || 'Receipt'} - Receipt ${clean(rc)}`, { author: SB(r.branch).legalName, creator: SB(r.branch).legalName });
     toast(`Receipt downloaded – ${rc}`);
