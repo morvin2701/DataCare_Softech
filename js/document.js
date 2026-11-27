@@ -405,8 +405,8 @@ function signStripHTML(d, S) {
   if (!signEveryPage(d)) return '';
   const who = String(d.employee || d.preparedBy || '').trim();   // the employee who made the document
   return `<div class="sign-strip">
-      <div class="ss"><div class="ss-line"></div><b>Accepted by ${esc(S.companyName || S.legalName)}${who ? ` <span>· ${esc(who)}</span>` : ''}</b></div>
-      <div class="ss"><div class="ss-line"></div><b>Customer Signature &amp; Stamp <span>· Date ____ / ____ / ______</span></b></div>
+      <div class="ss"><div class="ss-line"></div><b>Accepted by ${esc(S.companyName || S.legalName)}</b><span>${who ? esc(who) : '&nbsp;'}</span></div>
+      <div class="ss"><div class="ss-line"></div><b>Customer Signature &amp; Stamp</b><span>Date: ____ / ____ / ______</span></div>
     </div>`;
 }
 

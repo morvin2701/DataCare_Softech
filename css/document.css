@@ -578,14 +578,15 @@
 
 /* ===== signature lines at the foot of every page (compact: a line and one caption each) ===== */
 .page .sign-strip { position: absolute; left: 64px; right: 52px; bottom: 94px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; font-family: inherit; }
-.page.sign-every .pg-body { bottom: 136px; }
+.page.sign-every .pg-body { bottom: 150px; }
 .page .sign-strip .ss-line { height: 20px; border-bottom: 1px solid #555; }
 .page .sign-strip .ss b { display: block; font-size: 10.5px; color: #222; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.page .sign-strip .ss b span { color: #777; font-weight: 500; }
+.page .sign-strip .ss > span { display: block; font-size: 10px; color: #666; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tpl-premium .sign-strip { left: 48px; right: 48px; bottom: 60px; gap: 48px; }
-.tpl-premium.sign-every .pg-body { bottom: 102px; }
+.tpl-premium.sign-every .pg-body { bottom: 116px; }
 .tpl-premium .sign-strip .ss-line { border-bottom: 1.2px solid #9AA3B5; }
 .tpl-premium .sign-strip .ss b { color: var(--navy); }
+.tpl-premium .sign-strip .ss > span { color: var(--muted); }
 
 .tpl-premium .p-items.cont { margin-top: 0; }
 .tpl-premium .p-items.join { margin-top: 0; border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
