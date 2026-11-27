@@ -938,6 +938,7 @@ function renderDocs() {
       <p>Every document saved by the team appears here, ready to reopen, download as PDF, or convert.</p>
       ${!docsView.region || canWriteRegion(docsView.region) ? `<div class="empty-actions">
         <button class="btn" data-new="quotation">+ New Quotation</button>
+        <button class="btn" data-new="order">+ New Order Form</button>
         <button class="btn primary" data-new="invoice">+ New Invoice</button>
       </div>` : ''}`;
     $('#docEmpty').hidden = false;
@@ -2314,6 +2315,7 @@ async function init() {
   });
   setEditorPane('form');
   $('#btnNewQ').addEventListener('click', async () => { if (await confirmDiscard()) openDoc(newDoc('quotation')); });
+  $('#btnNewO').addEventListener('click', async () => { if (await confirmDiscard()) openDoc(newDoc('order')); });
   $('#btnNewI').addEventListener('click', async () => { if (await confirmDiscard()) openDoc(newDoc('invoice')); });
   $('#btnSave').addEventListener('click', () => saveDoc());
   $('#btnPdf').addEventListener('click', downloadPdf);
