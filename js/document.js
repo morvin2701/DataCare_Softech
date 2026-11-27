@@ -378,7 +378,7 @@ function buildBlocks(d, S) {
         <p>Read and accepted above mentioned all the terms and conditions.</p>
         <div class="sign-space"></div>
         <div class="sign-line">Customer Signature &amp; Stamp</div>
-      </div>`);
+      </div>`, { cls: 'has-sign' });   // the full signature block: the per-page lines give way on its page
   }
 
   // Version comparison list (attachment, starts on a new page)
@@ -470,10 +470,16 @@ function renderPages(d, S, container) {
         el.innerHTML = g.html;
         return el;
       });
+      // the page that carries the full signature block does not need the signature lines at its foot:
+      // that space is given back to the body, which also lets the block stay on the previous page more often
+      const hasSign = group.some(g => g.cls === 'has-sign');
+      if (hasSign) page.classList.remove('sign-every');
       els.forEach(el => body.appendChild(el));
       if (overflows() && body.children.length > els.length) {
+        if (hasSign && signEveryPage(d)) page.classList.add('sign-every');   // the page we leave keeps its lines
         els.forEach(el => el.remove());
         next();
+        if (hasSign) page.classList.remove('sign-every');
         // a block that continues something (e.g. a comparison group) gets its heading back at the top of the page
         group.forEach((g, k) => { if (g.contHtml) els[k].innerHTML = g.contHtml; });
         els.forEach(el => body.appendChild(el));
@@ -494,6 +500,7 @@ function renderPages(d, S, container) {
 
   const pages = container.querySelectorAll('.page');
   pages.forEach((p, i) => {
+    if (!p.classList.contains('sign-every')) { const s = p.querySelector('.sign-strip'); if (s) s.remove(); }
     p.querySelector('.pn').textContent = i + 1;
     p.querySelector('.pt').textContent = pages.length;
   });

@@ -283,7 +283,7 @@ function buildBlocksPremium(d, S) {
         <div class="p-thanks">Thank you for choosing ${esc(S.companyName)}!</div>
         <small>For any queries, contact ${esc(d.preparedBy)} on ${esc(d.preparedMobile)}.</small>
       </div>`;
-  add(`<div class="p-sign">${left}${right}</div>`);
+  add(`<div class="p-sign">${left}${right}</div>`, { cls: 'has-sign' });   // the full signature block: the per-page lines give way on its page
   addComparisonPremium(d, S, add);
   return blocks;
 }
