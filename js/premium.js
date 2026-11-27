@@ -54,7 +54,7 @@ function premiumHeader(d, S, first) {
   const brand = S.logo && S.logoHasName
     ? `<img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">`
     : `<div class="p-brand">${brandMark(S, first ? 64 : 36)}
-         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(S.legalName)}</div>` : ''}</div>
+         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(headerTagline(S))}</div>` : ''}</div>
        </div>`;
 
   if (!first) {

@@ -116,6 +116,7 @@ const DEFAULT_COMPARISON = (() => {
 const DEFAULT_SETTINGS = {
   companyName: 'Data Care Softech',
   legalName: 'DataCare Softech FZCO',
+  tagline: '',             // printed under the company name on the header; empty = the legal name
   website: 'www.datacaresoftech.com',
   email: '',
   showFooterLine: true,

@@ -1575,6 +1575,7 @@ function settingsHTML() {
         <div class="grid2">
           ${field('Company name (header)', inp(`branches.${k}.companyName`, `placeholder="${esc(S.companyName || '')}"`), 'Header, footer, receipts and signature blocks of this branch\'s documents')}
           ${field('Legal name', inp(`branches.${k}.legalName`, `placeholder="${esc(S.legalName || '')}"`))}
+          ${field('Tagline under the name', inp(`branches.${k}.tagline`, `placeholder="${esc(S.tagline || S.legalName || '')}"`))}
           ${field('Email', inp(`branches.${k}.email`, `type="email" placeholder="${esc(S.email || '')}"`))}
           ${field('Website', inp(`branches.${k}.website`, `placeholder="${esc(S.website || '')}"`))}
         </div>
@@ -1597,7 +1598,8 @@ function settingsHTML() {
       ${sect('company', 'Company', 'How your company appears on quotations and invoices.', `
         <div class="grid2">
           ${field('Company name (header)', inp('companyName'), 'Shown large on the header; the last word is highlighted in the accent colour')}
-          ${field('Legal name', inp('legalName'), 'Used under the name, in the footer and in signature blocks')}
+          ${field('Legal name', inp('legalName'), 'Used in the footer and in signature blocks (and under the name when no tagline is set)')}
+          ${field('Tagline under the company name', inp('tagline', 'placeholder="e.g. Software for Jewellers since 2005"'), 'Printed under the name on the header and on receipts; leave empty to show the legal name there', true)}
           ${field('Website', inp('website', 'placeholder="www.example.com"'))}
           ${field('Email', inp('email', 'type="email" placeholder="optional"'))}
           ${field('Document design', `<select data-s="template">${opt('premium', 'Premium (modern)', S.template)}${opt('classic', 'Classic (original layout)', S.template)}</select>`)}
@@ -1616,7 +1618,7 @@ function settingsHTML() {
         <label class="switch"><input type="checkbox" data-s="logoHasName"><span class="track"></span><span>My logo image already includes the company name (hide the typed name next to it)</span></label>
         <div class="brand-preview">
           <small>Header preview</small>
-          <div class="bp-row">${S.logo && S.logoHasName ? `<img class="bp-full" src="${S.logo}" alt="">` : `${brandMark(S, 46)}<div><div class="bp-name">${brandName(S)}</div><div class="bp-legal">${esc(S.legalName)}</div></div>`}</div>
+          <div class="bp-row">${S.logo && S.logoHasName ? `<img class="bp-full" src="${S.logo}" alt="">` : `${brandMark(S, 46)}<div><div class="bp-name">${brandName(S)}</div><div class="bp-legal">${esc(headerTagline(S))}</div></div>`}</div>
         </div>
       `)}
 

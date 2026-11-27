@@ -375,7 +375,7 @@ function receiptPage(r, S0) {
   const cur = r.cur;
   const brand = S.logo && S.logoHasName
     ? `<img class="rcpt-logo" src="${S.logo}" alt="">`
-    : `<div class="rcpt-brand">${S.logo ? `<img src="${S.logo}" alt="">` : ''}<div><div class="rcpt-name">${esc(S.companyName || S.legalName)}</div><div class="rcpt-legal">${esc(S.legalName)}</div></div></div>`;
+    : `<div class="rcpt-brand">${S.logo ? `<img src="${S.logo}" alt="">` : ''}<div><div class="rcpt-name">${esc(S.companyName || S.legalName)}</div><div class="rcpt-legal">${esc(headerTagline(S))}</div></div></div>`;
   const kv = (k, v) => (v ? `<div class="rcpt-kv"><small>${k}</small><b>${esc(v)}</b></div>` : '');
   const taxName = b.taxLabel === 'VAT' ? 'TRN' : 'GSTIN';
   const today = todayISO();

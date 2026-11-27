@@ -403,11 +403,14 @@ function newPageEl(d, S) {
  */
 /** Settings as they apply to one branch's documents: a branch may print its own company name, legal name, email and
     website (Settings → Branches), so India documents carry the Indian company and Dubai documents the UAE one. */
+/** The line under the company name on the header: the tagline when one is set, else the legal name. */
+const headerTagline = S => String(S.tagline || '').trim() || String(S.legalName || '');
+
 function brandedFor(S, branch) {
   const b = (S.branches || {})[branch] || {};
   const pick = k => String(b[k] || '').trim();
-  if (!pick('companyName') && !pick('legalName') && !pick('email') && !pick('website')) return S;
-  return { ...S, companyName: pick('companyName') || S.companyName, legalName: pick('legalName') || S.legalName, email: pick('email') || S.email, website: pick('website') || S.website };
+  if (!pick('companyName') && !pick('legalName') && !pick('tagline') && !pick('email') && !pick('website')) return S;
+  return { ...S, companyName: pick('companyName') || S.companyName, legalName: pick('legalName') || S.legalName, tagline: pick('tagline') || S.tagline, email: pick('email') || S.email, website: pick('website') || S.website };
 }
 
 function renderPages(d, S, container) {
