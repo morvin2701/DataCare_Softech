@@ -128,7 +128,7 @@ const DEFAULT_SETTINGS = {
     IN:  { label: 'INDIA', phone: '+91 87581 11027', address: 'Ahmedabad, Gujarat, India', currency: 'INR', taxLabel: 'GST', taxRate: 18, taxId: '' }
   },
   // Support box + QR code printed on documents. Empty phone / WhatsApp = the issuing branch's number.
-  support: { phone: '', whatsapp: '', hours: 'Monday to Saturday, 10:00 AM to 7:00 PM (Sunday closed)' },
+  support: { phone: '', whatsapp: '', hours: 'Monday to Saturday, 10:00 AM to 7:00 PM (Sunday closed)', rows: null },   // rows: the printed Support lines, user-defined (null = built from the fields above)
   qrTarget: 'whatsapp',   // 'whatsapp' | 'website' | 'none'
   preparedBy: 'Shreyash Thumar',
   headerContact2: { phone: '' },   // second number on the header; '' = the other branch's office number

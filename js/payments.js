@@ -389,8 +389,9 @@ function receiptPage(r, S0) {
 
   // support box and QR code, as printed on the invoices
   const sup = S.support || {};
-  const phone = (sup.phone || '').trim() || b.phone || '';
-  const whatsapp = (sup.whatsapp || '').trim() || phone;
+  const supRows = supportRowsOf(S, r.branch).slice(0, 4);
+  const phone = ((supRows.find(x => x.icon === 'phone') || {}).value) || b.phone || '';
+  const whatsapp = supportWhatsApp(S, r.branch);
   const waDigits = whatsapp.replace(/\D/g, '');
   const site = (S.website || '').trim();
   const target = S.qrTarget || 'whatsapp';
@@ -448,9 +449,7 @@ function receiptPage(r, S0) {
         <div class="rcpt-sup-txt">
           <small>Need help?</small>
           <div class="rcpt-sup-grid">
-            ${waDigits && waDigits !== phone.replace(/\D/g, '') ? supLine('Call us', phone) + supLine('WhatsApp', whatsapp) : supLine('Call / WhatsApp', phone)}
-            ${supLine('Working hours', (sup.hours || '').trim())}
-            ${supLine('Email', (S.email || '').trim())}
+            ${supRows.length ? supRows.map(x => supLine(x.label || 'Support', x.value)).join('') : supLine('Call / WhatsApp', phone)}
           </div>
           <div class="rcpt-note">${r.mode === 'Cheque' ? 'Subject to realisation of the cheque. ' : ''}This is a computer-generated receipt from ${esc(S.legalName)}; please quote the receipt number in any correspondence.</div>
         </div>

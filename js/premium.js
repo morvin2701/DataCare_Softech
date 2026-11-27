@@ -230,15 +230,11 @@ function buildBlocksPremium(d, S) {
         </div>`);
     }
     if (info.support) {
-      const s = info.support;
+      const ICON_OF = { phone: P_ICON.phone, whatsapp: P_ICON.chat, clock: P_ICON.clock, mail: P_ICON.mailsm, web: P_ICON.web, pin: P_ICON.pin, info: P_ICON.pin };
       cards.push(`<div class="p-icard">
           <div class="p-label">Support</div>
-          <div class="p-sups${info.payment ? '' : ' two'}">
-            ${s.whatsapp.replace(/\D/g, '') === s.phone.replace(/\D/g, '')
-              ? line(P_ICON.chat, 'Call / WhatsApp', s.phone)
-              : line(P_ICON.phone, 'Call us', s.phone) + line(P_ICON.chat, 'WhatsApp', s.whatsapp)}
-            ${line(P_ICON.clock, 'Working hours', s.hours)}
-            ${info.payment ? '' : line(P_ICON.mailsm, 'Email', s.email) /* narrow layout: the email is already on the header */}
+          <div class="p-sups${info.payment && info.support.rows.length <= 3 ? '' : ' two'}">
+            ${info.support.rows.map(r => line(ICON_OF[r.icon] || P_ICON.pin, r.label || 'Support', r.value)).join('')}
           </div>
         </div>`);
     }

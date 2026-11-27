@@ -92,6 +92,35 @@ function qrImg(text, cls) {
 /** "Advance Received" while only the upfront advance exists; "Payment Received" once payments were recorded. */
 const receivedTitle = d => ((d.payments || []).length ? 'Payment Received' : 'Advance Received');
 
+/* The Support box: a list of rows the team writes itself (icon, label, details). Teams that have not edited the
+   list yet get the older fixed fields (phone, WhatsApp, hours, email) as rows. */
+const SUPPORT_ICONS = ['phone', 'whatsapp', 'clock', 'mail', 'web', 'pin', 'info'];
+function supportRowsOf(S, branch) {
+  const sup = S.support || {};
+  const b = (S.branches || {})[branch] || {};
+  if (Array.isArray(sup.rows)) {
+    return sup.rows.filter(r => r && String(r.value || '').trim())
+      .map(r => ({ icon: SUPPORT_ICONS.includes(r.icon) ? r.icon : 'info', label: String(r.label || '').trim(), value: String(r.value || '').trim() }));
+  }
+  const digits = v => String(v || '').replace(/\D/g, '');
+  const phone = (sup.phone || '').trim() || b.phone || '';
+  const whatsapp = (sup.whatsapp || '').trim();
+  const separate = whatsapp && digits(whatsapp) !== digits(phone);
+  const rows = [];
+  if (phone) rows.push({ icon: 'phone', label: separate ? 'Call us' : 'Call / WhatsApp', value: phone });
+  if (separate) rows.push({ icon: 'whatsapp', label: 'WhatsApp', value: whatsapp });
+  if ((sup.hours || '').trim()) rows.push({ icon: 'clock', label: 'Working hours', value: sup.hours.trim() });
+  if ((S.email || '').trim()) rows.push({ icon: 'mail', label: 'Email', value: S.email.trim() });
+  return rows;
+}
+/** The WhatsApp number the QR code opens: the QR field, else the WhatsApp row, else the phone row, else the branch phone. */
+function supportWhatsApp(S, branch) {
+  const sup = S.support || {};
+  const rows = supportRowsOf(S, branch);
+  const pick = ic => (rows.find(r => r.icon === ic) || {}).value || '';
+  return (sup.whatsapp || '').trim() || pick('whatsapp') || pick('phone') || ((S.branches || {})[branch] || {}).phone || '';
+}
+
 function infoSection(d, S) {
   const T = docTotals(d);
   const pay = d.payment || {};
@@ -104,17 +133,16 @@ function infoSection(d, S) {
   const on = d.showSupport === undefined ? d.type === 'invoice' : !!d.showSupport;
   let support = null, qr = null;
   if (on) {
-    const sup = S.support || {};
-    const phone = (sup.phone || '').trim() || S.branches[d.branch].phone;
-    const whatsapp = (sup.whatsapp || '').trim() || phone;
-    support = { phone, whatsapp, hours: (sup.hours || '').trim(), email: (S.email || '').trim() };
+    const rows = supportRowsOf(S, d.branch);
+    const whatsapp = supportWhatsApp(S, d.branch);
+    support = rows.length ? { rows, whatsapp } : null;
     const target = S.qrTarget || 'whatsapp';
     const waDigits = whatsapp.replace(/\D/g, '');
     const site = (S.website || '').trim();
     if (target === 'whatsapp' && waDigits) qr = { url: 'https://wa.me/' + waDigits, title: 'Scan to chat', sub: 'WhatsApp support' };
     else if (target === 'website' && site) qr = { url: /^https?:\/\//i.test(site) ? site : 'https://' + site, title: 'Scan to visit', sub: site.replace(/^https?:\/\//i, '') };
   }
-  return payment || support ? { payment, support, qr } : null;
+  return payment || support || qr ? { payment, support, qr } : null;
 }
 
 /* ---------- software versions + comparison list ---------- */
@@ -358,7 +386,7 @@ function buildBlocks(d, S) {
         ${row('Amount', `${cur} ${fmtMoney(info.payment.amount, cur)}`)}${row('Date', fmtDate(info.payment.date))}${row('Mode', info.payment.mode)}${row('Reference', info.payment.ref)}
         ${info.payment.balance !== undefined ? row('Balance due', `${cur} ${fmtMoney(info.payment.balance, cur)}`) : '<div class="info-note">Paid in full.</div>'}</td>`);
     if (info.support) cells.push(`<td><b class="info-h">Support</b>
-        ${row('Phone', info.support.phone)}${info.support.whatsapp !== info.support.phone ? row('WhatsApp', info.support.whatsapp) : ''}${row('Email', info.support.email)}${row('Hours', info.support.hours)}</td>`);
+        ${info.support.rows.map(r => row(r.label || 'Support', r.value)).join('')}</td>`);
     if (info.qr) cells.push(`<td class="info-qr">${qrImg(info.qr.url, 'qr')}<div><b>${esc(info.qr.title)}</b><br>${esc(info.qr.sub)}</div></td>`);
     add(`<table class="info"><tr>${cells.join('')}</tr></table>`, { preferFirst: true });
   }

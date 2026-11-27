@@ -1537,6 +1537,20 @@ function refreshSecondNumber() {
   if (wrap) wrap.innerHTML = secondNumberHTML();
 }
 
+const SUPPORT_ICON_LABELS = [['phone', 'Phone'], ['whatsapp', 'WhatsApp'], ['clock', 'Hours'], ['mail', 'Email'], ['web', 'Website'], ['pin', 'Address'], ['info', 'Other']];
+/** Rows of the Support box editor. A team that never edited the list starts with its old phone/WhatsApp/hours/email. */
+function supportRowsHTML() {
+  S.support = S.support || {};
+  if (!Array.isArray(S.support.rows)) S.support.rows = supportRowsOf(S, REGION || S.lastBranch || 'UAE');
+  return S.support.rows.map((r, i) => `
+    <tr>
+      <td data-label="Icon"><select data-sup="${i}" data-k="icon">${SUPPORT_ICON_LABELS.map(([v, l]) => opt(v, l, r.icon || 'info')).join('')}</select></td>
+      <td data-label="Label"><input data-sup="${i}" data-k="label" value="${esc(r.label || '')}" placeholder="e.g. Call us"></td>
+      <td data-label="Details"><input data-sup="${i}" data-k="value" value="${esc(r.value || '')}" placeholder="e.g. +91 98765 43210"></td>
+      <td><button type="button" class="icon-act danger" data-delsup="${i}" title="Take this row out">${icon('trash')}</button></td>
+    </tr>`).join('') || '<tr><td colspan="4" class="center muted">No rows yet, so the Support box is not printed. Add a row below.</td></tr>';
+}
+
 function presetRowsHTML() {
   return S.presets.map((p, i) => `
     <tr>
@@ -1638,12 +1652,16 @@ function settingsHTML() {
       `)}
 
       ${sect('support', 'Support &amp; QR code', 'Printed in a box on invoices (and on quotations when switched on in the editor), so customers know how to reach you.', `
-        <div class="grid2">
-          ${field('Support phone', inp('support.phone', `type="tel" placeholder="${esc(S.branches[REGION || S.lastBranch || 'UAE'].phone)}"`), 'Leave empty to use your branch number')}
-          ${field('WhatsApp number', inp('support.whatsapp', 'type="tel" placeholder="same as support phone"'), 'With country code, e.g. +971 55 …')}
+        <p class="hint" style="margin:0 0 10px">Each row is one line in the box: pick an icon, write the label and the details. Add as many as you need – numbers, hours, email, website, address, anything.</p>
+        <div class="table-wrap">
+          <table class="edit-table" id="supportTable">
+            <thead><tr><th class="w120">Icon</th><th class="w170">Label</th><th>Details</th><th class="w44"></th></tr></thead>
+            <tbody>${supportRowsHTML()}</tbody>
+          </table>
         </div>
+        <div class="sect-foot"><button type="button" class="btn sm" id="addSupportRow">+ Add row</button></div>
         <div class="grid2" style="margin-top:14px">
-          ${field('Working hours', inp('support.hours'))}
+          ${field('WhatsApp number for the QR code', inp('support.whatsapp', 'type="tel" placeholder="from the WhatsApp or phone row above"'), 'Leave empty to use the WhatsApp (or phone) row above')}
           ${field('QR code opens', `<select data-s="qrTarget">${opt('whatsapp', 'WhatsApp chat with us', S.qrTarget)}${opt('website', 'Our website', S.qrTarget)}${opt('none', 'No QR code', S.qrTarget)}</select>`)}
         </div>
         <div class="qr-preview" id="qrPreview"></div>
@@ -1803,6 +1821,11 @@ function bindSettings() {
       it[el.dataset.k] = el.dataset.k === 'desc' ? el.value : (parseFloat(el.value) || 0);
       settingsChanged(); return;
     }
+    if (el.dataset.sup !== undefined) {
+      const r = S.support.rows[+el.dataset.sup];
+      if (r) { r[el.dataset.k] = el.value; refreshQrPreview(); settingsChanged(); }
+      return;
+    }
     if (!el.dataset.s) return;
     const v = el.hasAttribute('data-csv') ? el.value.split(',').map(s => s.trim()).filter(Boolean) : readVal(el);
     setPath(S, el.dataset.s, v);
@@ -1857,6 +1880,15 @@ function bindSettings() {
     if (b.dataset.rmimg) {
       S[b.dataset.rmimg] = null; if (b.dataset.rmimg === 'logo') S.logoHasName = false;
       saveSettings(); loadSettingsForm(); toast('Image removed');
+    } else if (b.dataset.delsup !== undefined) {
+      S.support.rows.splice(+b.dataset.delsup, 1);
+      $('#supportTable tbody').innerHTML = supportRowsHTML();
+      refreshQrPreview(); settingsChanged();
+    } else if (b.id === 'addSupportRow') {
+      S.support.rows.push({ icon: 'info', label: '', value: '' });
+      $('#supportTable tbody').innerHTML = supportRowsHTML();
+      const inputs = $$('#supportTable tbody input'); if (inputs.length) inputs[inputs.length - 2].focus();
+      settingsChanged();
     } else if (b.dataset.delpreset !== undefined) {
       S.presets.splice(+b.dataset.delpreset, 1);
       $('#presetTable tbody').innerHTML = presetRowsHTML();
