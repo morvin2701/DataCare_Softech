@@ -505,7 +505,7 @@ function renderPages(d, S, container) {
   }
   // a page limit: no document is longer than 4 pages – tighter spacing first, then the content is drawn smaller
   // step by step until it fits (header, footer and signature lines keep their size)
-  const MAX_PAGES = { quotation: 4, order: 4, invoice: 4 };
+  const MAX_PAGES = { quotation: 4, order: 4 };   // invoices keep their natural length
   const max = MAX_PAGES[d.type];
   if (max && normal.pages > max) {
     let r = layout(true);
@@ -515,6 +515,10 @@ function renderPages(d, S, container) {
   const pages = container.querySelectorAll('.page');
   pages.forEach((p, i) => {
     if (!p.classList.contains('sign-every')) { const s = p.querySelector('.sign-strip'); if (s) s.remove(); }
+    // a table that continues on the next page still ends as a closed box at the foot of this one
+    const body = p.querySelector('.pg-body');
+    const lastBlk = body && body.lastElementChild;
+    if (lastBlk) lastBlk.querySelectorAll('.p-comp.open, .p-items.open, table.items.open').forEach(el => el.classList.add('closed'));
     p.querySelector('.pn').textContent = i + 1;
     p.querySelector('.pt').textContent = pages.length;
   });

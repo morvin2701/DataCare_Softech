@@ -448,6 +448,7 @@
 /* comparison chunks of one group join into one table on the page */
 .tpl-premium .p-comp.open { margin-bottom: 0; border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .tpl-premium .p-comp.join { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.tpl-premium .p-comp.open.closed, .tpl-premium .p-items.open.closed { border-bottom: 1px solid var(--hair); border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
 .tpl-premium .p-comp.join tr:first-child td { border-top: 1px solid #EEF1F6; }
 .page .comp.open { margin-bottom: 0; }
 .page .comp.join { margin-top: -1px; }
