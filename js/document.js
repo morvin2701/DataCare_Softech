@@ -403,8 +403,9 @@ function buildBlocks(d, S) {
 const signEveryPage = d => d.signEveryPage !== false;
 function signStripHTML(d, S) {
   if (!signEveryPage(d)) return '';
+  const who = String(d.employee || d.preparedBy || '').trim();   // the employee who made the document
   return `<div class="sign-strip">
-      <div class="ss"><div class="ss-line"></div><b>Accepted by ${esc(S.companyName || S.legalName)}</b></div>
+      <div class="ss"><div class="ss-line"></div><b>Accepted by ${esc(S.companyName || S.legalName)}${who ? ` <span>· ${esc(who)}</span>` : ''}</b></div>
       <div class="ss"><div class="ss-line"></div><b>Customer Signature &amp; Stamp <span>· Date ____ / ____ / ______</span></b></div>
     </div>`;
 }
@@ -439,7 +440,7 @@ function renderPages(d, S, container) {
   const blocks = premium ? buildBlocksPremium(d, S) : buildBlocks(d, S);
 
   /** Lays the blocks out. Returns false when a block that belongs on page 1 (preferFirst) did not fit there. */
-  const layout = tight => {
+  const layout = (tight, scale = 1) => {
     container.innerHTML = '';
     let page, body, firstPageOk = true;
     const next = () => {
@@ -448,6 +449,12 @@ function renderPages(d, S, container) {
       container.appendChild(page);
       if (premium) fitContacts(page);
       body = page.querySelector('.pg-body');
+      if (scale < 1) {
+        // the body is laid out larger and drawn smaller, so more fits in the same frame (header, footer, lines stay)
+        const w = body.clientWidth, h = body.clientHeight;
+        Object.assign(body.style, { width: `${w / scale}px`, height: `${h / scale}px`, right: 'auto', bottom: 'auto', transform: `scale(${scale})`, transformOrigin: '0 0' });
+        page.classList.add('scaled');
+      }
     };
     const overflows = () => body.scrollHeight > body.clientHeight + 1;
     next();
@@ -491,10 +498,18 @@ function renderPages(d, S, container) {
 
   // Normal spacing first. If that pushes the page-1 info row onto page 2 (leaving a gap at the bottom of
   // page 1), try slightly tighter spacing, and keep it only when it brings the row back or saves a page.
-  const normal = layout(false);
+  let normal = layout(false);
   if (!normal.ok) {
     const tight = layout(true);
-    if (!tight.ok && tight.pages >= normal.pages) layout(false);
+    if (!tight.ok && tight.pages >= normal.pages) normal = layout(false); else normal = tight;
+  }
+  // a page limit: an order form is never longer than 4 pages – tighter spacing first, then the content is drawn
+  // smaller step by step until it fits
+  const MAX_PAGES = { order: 4 };
+  const max = MAX_PAGES[d.type];
+  if (max && normal.pages > max) {
+    let r = layout(true);
+    for (const s of [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5]) { if (r.pages <= max) break; r = layout(true, s); }
   }
 
   const pages = container.querySelectorAll('.page');
