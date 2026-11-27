@@ -582,6 +582,7 @@
 .page .sign-strip .ss-line { height: 20px; border-bottom: 1px solid #555; }
 .page .sign-strip .ss b { display: block; font-size: 10.5px; color: #222; font-weight: 600; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .page .sign-strip .ss > span { display: block; font-size: 10px; color: #666; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.page .sign-strip .ss b span { font-weight: 500; color: #555; margin-left: 6px; }
 .tpl-premium .sign-strip { left: 48px; right: 48px; bottom: 60px; gap: 48px; }
 .tpl-premium.sign-every .pg-body { bottom: 116px; }
 .tpl-premium .sign-strip .ss-line { border-bottom: 1.2px solid #9AA3B5; }
