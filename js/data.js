@@ -168,7 +168,7 @@ const kindOf = t => DOC_KINDS[t] || DOC_KINDS.quotation;
 /** Default on/off switches for each kind of document. */
 function typeDefaults(t) {
   const q = t === 'quotation';
-  return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice' };
+  return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice', signEveryPage: true };
 }
 
 /* Teams (regions). This is the built-in list used when the app runs without the server; with the server the list

@@ -94,9 +94,9 @@ function premiumFooter(d, S) {
 
 function newPagePremium(d, S, index) {
   const page = document.createElement('div');
-  page.className = `page tpl-premium doc-${d.type}`;
+  page.className = `page tpl-premium doc-${d.type}${signEveryPage(d) ? ' sign-every' : ''}`;
   page.innerHTML = `<div class="pg-head">${premiumHeader(d, S, index === 0)}</div>${P_WATERMARK}
-    <div class="pg-body${index === 0 ? ' first' : ''}"></div><div class="pg-foot">${premiumFooter(d, S)}</div>`;
+    <div class="pg-body${index === 0 ? ' first' : ''}"></div><div class="pg-foot">${signStripHTML(d, S)}${premiumFooter(d, S)}</div>`;
   return page;
 }
 
@@ -157,12 +157,21 @@ function buildBlocksPremium(d, S) {
 
   // Items
   const items = d.items.filter(it => it.desc || Number(it.amount));
-  const rows = items.map((it, i) => `<tr><td class="n">${String(i + 1).padStart(2, '0')}</td>
-      <td>${esc(it.desc)}</td><td class="a">${pMoney(it.amount, cur)}</td></tr>`).join('')
-    || '<tr><td class="n">01</td><td>&nbsp;</td><td class="a"></td></tr>';
-  add(`<div class="p-items"><table>
-      <thead><tr><th class="n">#</th><th>Description</th><th class="a">Amount (${esc(cur)})</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`);
+  const rowHtml = (it, i) => `<tr><td class="n">${String(i + 1).padStart(2, '0')}</td>
+      <td>${esc(it.desc)}</td><td class="a">${pMoney(it.amount, cur)}</td></tr>`;
+  const allRows = items.map(rowHtml);
+  if (!allRows.length) allRows.push('<tr><td class="n">01</td><td>&nbsp;</td><td class="a"></td></tr>');
+  // long lists flow across pages: rows go in chunks, each chunk a table with the column heading repeated
+  const head = `<thead><tr><th class="n">#</th><th>Description</th><th class="a">Amount (${esc(cur)})</th></tr></thead>`;
+  // chunks on the same page join into one table; a chunk that starts a new page gets the heading back
+  const CH = 6;
+  for (let i = 0; i < allRows.length; i += CH) {
+    const part = allRows.slice(i, i + CH).join('');
+    const last = i + CH >= allRows.length;
+    const cls = `p-items${i ? ' join' : ''}${last ? '' : ' open'}`;
+    add(`<div class="${cls}"><table>${i ? '' : head}<tbody>${part}</tbody></table></div>`,
+      i ? { contHtml: `<div class="p-cont">Items (continued)</div><div class="p-items cont${last ? '' : ' open'}"><table>${head}<tbody>${part}</tbody></table></div>` } : {});
+  }
 
   // Totals + amount in words
   const tr = (k, v, cls = '') => `<div class="p-tr ${cls}"><span>${k}</span><b>${v}</b></div>`;

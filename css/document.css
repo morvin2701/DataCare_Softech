@@ -575,3 +575,23 @@
 .rcpt.tight .rcpt-foot { margin-top: 8px; }
 .rcpt.tight .rcpt-sign img { height: 50px; }
 .rcpt.tight .rcpt-sign-space { height: 36px; }
+
+/* ===== signature lines at the foot of every page ===== */
+.page .sign-strip { position: absolute; left: 64px; right: 52px; bottom: 94px; display: grid; grid-template-columns: 1fr 1fr; gap: 40px; font-family: inherit; }
+.page.sign-every .pg-body { bottom: 168px; }
+.page .sign-strip .ss small { display: block; font-size: 9.5px; letter-spacing: .6px; text-transform: uppercase; color: #666; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.page .sign-strip .ss-line { height: 30px; border-bottom: 1px solid #555; }
+.page .sign-strip .ss b { display: block; font-size: 10.5px; color: #222; font-weight: 600; margin-top: 4px; white-space: nowrap; }
+.page .sign-strip .ss b span { color: #777; font-weight: 500; }
+.tpl-premium .sign-strip { left: 48px; right: 48px; bottom: 60px; gap: 48px; }
+.tpl-premium.sign-every .pg-body { bottom: 136px; }
+.tpl-premium .sign-strip .ss small { color: var(--muted); }
+.tpl-premium .sign-strip .ss-line { border-bottom: 1.2px solid #9AA3B5; }
+.tpl-premium .sign-strip .ss b { color: var(--navy); }
+.tpl-premium .p-cont { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; margin: 0 0 4px; }
+.tpl-premium .p-items.cont { margin-top: 0; }
+.tpl-premium .p-items.join { margin-top: 0; border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.tpl-premium .p-items.join tbody tr:first-child td { border-top: 1px solid #EEF1F6; }
+.tpl-premium .p-items.open { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.tpl-premium .p-cont { margin-top: 14px; }
+.page table.items.join { margin-top: -1px; }

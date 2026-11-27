@@ -292,8 +292,18 @@ function buildBlocks(d, S) {
   }
 
   // Items table
-  const rows = d.items.filter(it => it.desc || Number(it.amount))
-    .map(it => `<tr><td>${esc(it.desc)}</td><td class="amt">${fmtMoney(it.amount, cur)}</td></tr>`).join('');
+  const rowList = d.items.filter(it => it.desc || Number(it.amount))
+    .map(it => `<tr><td>${esc(it.desc)}</td><td class="amt">${fmtMoney(it.amount, cur)}</td></tr>`);
+  const CH = 6;
+  // a long list flows across pages: rows go out in chunks that join on the same page; the last chunk carries the totals
+  const ihead = `<thead><tr><th>Description</th><th class="amt">Price (${esc(cur)})</th></tr></thead>`;
+  const lastStart = Math.max(0, Math.floor((rowList.length - 1) / CH) * CH);
+  for (let i = 0; i < lastStart; i += CH) {
+    add(`<table class="items${i ? ' join' : ''} open">${i ? '' : ihead}<tbody>${rowList.slice(i, i + CH).join('')}</tbody></table>`,
+      i ? { contHtml: `<table class="items open">${ihead}<tbody>${rowList.slice(i, i + CH).join('')}</tbody></table>` } : {});
+  }
+  const rows = rowList.slice(lastStart).join('');
+  const joinLast = lastStart > 0;
   let tot = '';
   if (T.disc || d.taxEnabled) {
     tot += `<tr class="sub"><td>Sub Total:</td><td class="amt">${fmtMoney(T.sub, cur)}</td></tr>`;
@@ -311,8 +321,8 @@ function buildBlocks(d, S) {
       tot += `<tr class="total"><td>${d.type === 'order' ? 'Balance Payable' : 'Balance Due'}:</td><td class="amt">${fmtMoney(T.balance, cur)}</td></tr>`;
     }
   }
-  add(`<table class="items">
-      <thead><tr><th>Description</th><th class="amt">Price (${esc(cur)})</th></tr></thead>
+  add(`<table class="items${joinLast ? ' join' : ''}">
+      ${joinLast ? '' : ihead}
       <tbody>${rows || '<tr><td>&nbsp;</td><td></td></tr>'}${tot}</tbody>
     </table>
     ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(paidInFull || !T.adv ? T.total : T.balance, cur))}</p>` : ''}
@@ -389,11 +399,22 @@ function buildBlocks(d, S) {
   return blocks;
 }
 
+/** Signature lines at the foot of every page: the company's authorised signatory on the left, the customer on the right. */
+const signEveryPage = d => d.signEveryPage !== false;
+function signStripHTML(d, S) {
+  if (!signEveryPage(d)) return '';
+  const party = String((d.customer || {}).company || '').trim();
+  return `<div class="sign-strip">
+      <div class="ss"><small>For ${esc(S.legalName)}</small><div class="ss-line"></div><b>Authorised Signatory</b></div>
+      <div class="ss"><small>${party ? `Accepted by ${esc(party)}` : 'Customer acceptance'}</small><div class="ss-line"></div><b>Customer Signature &amp; Stamp <span>· Date ____ / ____ / ______</span></b></div>
+    </div>`;
+}
+
 function newPageEl(d, S) {
   const page = document.createElement('div');
-  page.className = `page doc-${d.type}`;
+  page.className = `page doc-${d.type}${signEveryPage(d) ? ' sign-every' : ''}`;
   page.style.setProperty('--accent', S.accent || '#E8772E');
-  page.innerHTML = `<div class="pg-head">${headerHTML(d, S)}</div><div class="pg-body"></div><div class="pg-foot">${footerHTML(d, S)}</div>`;
+  page.innerHTML = `<div class="pg-head">${headerHTML(d, S)}</div><div class="pg-body"></div><div class="pg-foot">${signStripHTML(d, S)}${footerHTML(d, S)}</div>`;
   return page;
 }
 

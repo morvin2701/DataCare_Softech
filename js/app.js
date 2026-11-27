@@ -178,6 +178,7 @@ function normalizeDoc(d) {
   if (d.employee === undefined) d.employee = d.createdBy || '';
   if (!Array.isArray(d.history)) d.history = [];
   if (!Array.isArray(d.payments)) d.payments = [];   // payments recorded on the Payments page
+  if (d.signEveryPage === undefined) d.signEveryPage = true;   // signature lines on every page
   if (d.type === 'order' && ['Confirmed', 'In Progress', 'Installed'].includes(d.status)) d.status = d.status === 'Installed' ? 'Completed' : 'Pending';   // statuses renamed
   if (d.edition === undefined) d.edition = '';
   if (!Array.isArray(d.compHideCols)) d.compHideCols = [];
@@ -338,6 +339,7 @@ function formHTML(d) {
     </div>
     <label class="chk"><input type="checkbox" data-f="showSupport"> Show support details &amp; QR code <span class="hint">(numbers are set in Settings → Support &amp; QR)</span></label>
     <label class="chk"><input type="checkbox" data-f="showAcceptance"> Show “Read and accepted…” customer signature block</label>
+    <label class="chk"><input type="checkbox" data-f="signEveryPage"> Signature lines (company &amp; customer) at the foot of every page</label>
     <label class="chk"><input type="checkbox" data-f="showStamp" ${S.stamp ? '' : 'disabled'}> Show company stamp / signature ${S.stamp ? '' : '<span class="hint">(upload one in Settings)</span>'}</label>
   </fieldset>`;
 }
