@@ -403,9 +403,8 @@ function buildBlocks(d, S) {
 const signEveryPage = d => d.signEveryPage !== false;
 function signStripHTML(d, S) {
   if (!signEveryPage(d)) return '';
-  const who = String(d.employee || d.preparedBy || '').trim();   // the person who made the document signs for the company
   return `<div class="sign-strip">
-      <div class="ss"><div class="ss-line"></div><b>For ${esc(S.companyName || S.legalName)}${who ? ` <span>· ${esc(who)}</span>` : ''}</b></div>
+      <div class="ss"><div class="ss-line"></div><b>Accepted by ${esc(S.companyName || S.legalName)}</b></div>
       <div class="ss"><div class="ss-line"></div><b>Customer Signature &amp; Stamp <span>· Date ____ / ____ / ______</span></b></div>
     </div>`;
 }
