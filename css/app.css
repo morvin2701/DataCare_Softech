@@ -226,6 +226,8 @@ table.list .nowrap { white-space: nowrap; }
 }
 .list-foot:empty { display: none; }
 .list-foot b { color: var(--text); }
+.foot-sums { display: inline-flex; gap: 18px; flex-wrap: wrap; }
+.foot-sums > span { white-space: nowrap; }
 .empty-state { text-align: center; padding: 56px 20px 60px; }
 .empty-ic { width: 56px; height: 56px; border-radius: 14px; background: #fff1e6; color: var(--brand-dark); display: grid; place-items: center; margin: 0 auto 14px; }
 .empty-ic .ico { width: 26px; height: 26px; }

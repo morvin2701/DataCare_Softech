@@ -1009,9 +1009,13 @@ function renderDocs() {
       </tr>`;
     }).join('')}</tbody>`;
 
+  // net (after discount, before tax) · tax · total of the listed documents, per currency
+  const net = sumBy(list, d => { const t = docTotals(d); return [d.currency, t.sub - t.disc]; });
+  const tax = sumBy(list, d => [d.currency, docTotals(d).tax]);
   const totals = sumBy(list, d => [d.currency, docTotals(d).total]);
+  const m = (v, c) => `${c} ${fmtMoney(v, c, false)}`;
   $('#docFoot').innerHTML = `<span>Showing <b>${list.length}</b> of ${scoped.length} document${scoped.length === 1 ? '' : 's'}</span>
-    <span>Total of listed: ${Object.entries(totals).map(([c, v]) => `<b>${c} ${fmtMoney(v, c, false)}</b>`).join(' · ')}</span>`;
+    <span class="foot-sums">${Object.keys(totals).map(c => `<span>Net <b>${m(net[c] || 0, c)}</b></span><span>Tax <b>${m(tax[c] || 0, c)}</b></span><span>Total <b>${m(totals[c], c)}</b></span>`).join('')}</span>`;
 }
 
 function copyAsNew(src, type) {
