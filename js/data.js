@@ -120,6 +120,7 @@ const DEFAULT_SETTINGS = {
   website: 'www.datacaresoftech.com',
   email: '',
   showFooterLine: true,
+  footerText: '',          // the page footer line as the team wants it (parts separated by |); empty = legal name · address · tax number
   template: 'premium',     // 'premium' | 'classic'
   logoHasName: false,      // true when the uploaded logo image already contains the company name
   accent: '#E8772E',

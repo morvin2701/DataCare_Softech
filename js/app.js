@@ -1602,6 +1602,7 @@ function settingsHTML() {
           ${field('Tagline under the name', inp(`branches.${k}.tagline`, `placeholder="${esc(S.tagline || S.legalName || '')}"`))}
           ${field('Email', inp(`branches.${k}.email`, `type="email" placeholder="${esc(S.email || '')}"`))}
           ${field('Website', inp(`branches.${k}.website`, `placeholder="${esc(S.website || '')}"`))}
+          ${field('Footer line for this branch', inp(`branches.${k}.footerText`, 'placeholder="leave empty to use the footer line from Branding"'), 'Parts separated by |')}
         </div>
       </div>`;
   };
@@ -1631,7 +1632,10 @@ function settingsHTML() {
             <span class="color-field"><input type="color" data-s="accent"><code id="accentHex">${esc(S.accent)}</code></span>
           </label>
         </div>
-        <label class="switch"><input type="checkbox" data-s="showFooterLine"><span class="track"></span><span>Show legal name, address and tax number in the page footer</span></label>
+        <label class="switch"><input type="checkbox" data-s="showFooterLine"><span class="track"></span><span>Print a footer line on every page</span></label>
+        <div class="grid2" style="margin-top:12px">
+          ${field('Footer line', inp('footerText', 'placeholder="e.g. DataCare Softech FZCO | Dubai, U.A.E. | TRN 1001234567 | info@datacaresoftech.com"'), 'Write it exactly as it should print; separate parts with | . Leave empty for the automatic line: legal name · address · GSTIN/TRN')}
+        </div>
       `)}
 
       ${sect('branding', 'Branding', 'Logo and company stamp printed on documents.', `

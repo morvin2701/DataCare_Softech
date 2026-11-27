@@ -85,9 +85,7 @@ function premiumHeader(d, S, first) {
 }
 
 function premiumFooter(d, S) {
-  const b = S.branches[d.branch];
-  const bits = [S.legalName, b.address, b.taxId ? `${b.taxLabel === 'GST' ? 'GSTIN' : 'TRN'}: ${b.taxId}` : '']
-    .filter(Boolean).map(esc).join('<i>•</i>');
+  const bits = footerParts(d, S, false).map(esc).join('<i>•</i>');
   return `<div class="p-foot"><span>${S.showFooterLine ? bits : ''}</span>
       <span>Page <b class="pn"></b> of <b class="pt"></b></span></div>${P_STRIP_BOTTOM}`;
 }

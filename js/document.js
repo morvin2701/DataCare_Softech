@@ -259,10 +259,16 @@ function brandText(name) {
   return big + small;
 }
 
+/** The parts of the page footer line: the team's own text (parts separated by |), else legal name, address, tax number. */
+function footerParts(d, S, withEmail) {
+  const custom = String(S.footerText || '').trim();
+  if (custom) return custom.split(/\s*\|\s*|\n/).map(x => x.trim()).filter(Boolean);
+  const b = S.branches[d.branch] || {};
+  return [S.legalName, b.address, b.taxId ? `${b.taxLabel === 'GST' ? 'GSTIN' : 'TRN'}: ${b.taxId}` : '', withEmail ? S.email : ''].filter(Boolean);
+}
+
 function footerHTML(d, S) {
-  const b = S.branches[d.branch];
-  const bits = [S.legalName, b.address, b.taxId ? `${b.taxLabel === 'GST' ? 'GSTIN' : 'TRN'}: ${b.taxId}` : '', S.email]
-    .filter(Boolean).map(esc).join('  ·  ');
+  const bits = footerParts(d, S, true).map(esc).join('  ·  ');
   return `${DECOR_BOTTOM}
     ${S.showFooterLine && bits ? `<div class="foot-line">${bits}</div>` : ''}
     <div class="pg-num">Page <b class="pn"></b> of <b class="pt"></b></div>`;
@@ -458,8 +464,8 @@ const headerTagline = S => String(S.tagline || '').trim() || String(S.legalName 
 function brandedFor(S, branch) {
   const b = (S.branches || {})[branch] || {};
   const pick = k => String(b[k] || '').trim();
-  if (!pick('companyName') && !pick('legalName') && !pick('tagline') && !pick('email') && !pick('website')) return S;
-  return { ...S, companyName: pick('companyName') || S.companyName, legalName: pick('legalName') || S.legalName, tagline: pick('tagline') || S.tagline, email: pick('email') || S.email, website: pick('website') || S.website };
+  if (!pick('companyName') && !pick('legalName') && !pick('tagline') && !pick('email') && !pick('website') && !pick('footerText')) return S;
+  return { ...S, companyName: pick('companyName') || S.companyName, legalName: pick('legalName') || S.legalName, tagline: pick('tagline') || S.tagline, email: pick('email') || S.email, website: pick('website') || S.website, footerText: pick('footerText') || S.footerText };
 }
 
 function renderPages(d, S, container) {
