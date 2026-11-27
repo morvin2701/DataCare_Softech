@@ -73,6 +73,7 @@ function premiumHeader(d, S, first) {
         <div class="p-meta">
           <span>${title} No.</span><b>${esc(d.number)}</b>
           <span>Date</span><b>${esc(fmtDate(d.date))}</b>
+          ${d.type !== 'quotation' && d.dueDate ? `<span>Due Date</span><b>${esc(fmtDate(d.dueDate))}</b>` : ''}
         </div>
       </div>
     </div>
@@ -193,12 +194,27 @@ function buildBlocksPremium(d, S) {
     ? `<div class="p-label">Amount in Words</div><div class="p-words-t">${esc(amountInWords(wordsAmount, cur))}</div>` : '';
   const notes = d.notes && d.notes.trim()
     ? `<div class="p-label${words ? ' mt' : ''}">Note</div><div class="p-note">${esc(d.notes).replace(/\n/g, '<br>')}</div>` : '';
-  const payTerms = isOrder && (d.paymentTerms || '').trim()
-    ? `<div class="p-label${words || notes ? ' mt' : ''}">Payment Terms</div><div class="p-note">${esc(d.paymentTerms)}</div>` : '';
+  const ptl = paymentTermLines(d);
+  const payTerms = ptl.length
+    ? `<div class="p-label${words || notes ? ' mt' : ''}">Payment Terms</div><div class="p-note p-pterms">${ptl.map(t => `<div>${esc(t)}</div>`).join('')}</div>` : '';
   add(`<div class="p-sum">
       <div class="p-words${words || notes || payTerms ? '' : ' empty'}">${words}${notes}${payTerms}</div>
       <div class="p-totals">${tot}</div>
     </div>`);
+
+  // Bank details for payment (+ UPI QR for INR documents)
+  if (printBank(d, S)) {
+    const bk = bankOf(S, d.branch);
+    const upi = upiLink(d, S);
+    const kvb = (k, v) => (v ? `<span>${k}</span><b>${esc(v)}</b>` : '');
+    add(`<div class="p-bank">
+        <div class="p-bank-info">
+          <div class="p-label">Bank Details for Payment</div>
+          <div class="p-kv2 two">${kvb('Account name', bk.accountName)}${kvb('Bank', bk.bankName)}${kvb('Account no.', bk.accountNo)}${kvb(bk.codeLabel, bk.code)}${kvb('SWIFT', bk.swift)}${kvb('Branch', bk.branchName)}${kvb('UPI ID', bk.upiId)}</div>
+        </div>
+        ${upi ? `<div class="p-bank-qr">${qrImg(upi, 'p-qr')}<b>Scan &amp; Pay</b><small>${esc(cur)} ${pMoney(Math.max(0, T.balance), cur)} via UPI</small></div>` : ''}
+      </div>`);
+  }
 
   // Hardware configuration
   const hw = (d.hardware || []).filter(Boolean);

@@ -141,6 +141,9 @@ const DEFAULT_SETTINGS = {
   logo: null,
   stamp: null,
   terms: { quotation: QUOTATION_TERMS, order: ORDER_TERMS, invoice: INVOICE_TERMS },
+  // payment terms copied into every new document (one point per line) and the default due period of an invoice
+  paymentTermsDefault: ['50% advance with the order, balance before installation.', 'Payment is due by the due date printed on the invoice.', 'Please mention the invoice number when making the payment.'],
+  dueDays: 7,
   hardware: HARDWARE_CONFIG,                    // quotations (short, keeps them on one page)
   hardwareInvoice: HARDWARE_CONFIG_DETAILED,    // invoices (detailed)
   softwareVersions: ['DataCare Next'],
@@ -169,7 +172,7 @@ const kindOf = t => DOC_KINDS[t] || DOC_KINDS.quotation;
 /** Default on/off switches for each kind of document. */
 function typeDefaults(t) {
   const q = t === 'quotation';
-  return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice', signEveryPage: true };
+  return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice', signEveryPage: true, showBank: !q };
 }
 
 /* Teams (regions). This is the built-in list used when the app runs without the server; with the server the list
@@ -274,6 +277,11 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 
 function todayISO() {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+/** ISO date plus n days. */
+function addDaysISO(iso, n) {
+  const d = new Date((iso || todayISO()) + 'T00:00:00'); d.setDate(d.getDate() + (Number(n) || 0));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function fmtDate(iso) {

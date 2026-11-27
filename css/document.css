@@ -596,3 +596,23 @@
 .tpl-premium .p-items.open { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 .tpl-premium .p-cont { margin-top: 14px; }
 .page table.items.join { margin-top: -1px; }
+
+/* ===== payment terms, bank details & UPI QR ===== */
+.tpl-premium .p-pterms div { position: relative; padding-left: 12px; }
+.tpl-premium .p-pterms div::before { content: '•'; position: absolute; left: 0; color: var(--orange); }
+.tpl-premium .p-bank { display: flex; gap: 16px; align-items: stretch; margin-top: 12px; border: 1px solid var(--hair); border-radius: 12px; padding: 11px 16px 12px; background: #fff; }
+.tpl-premium .p-bank-info { flex: 1; min-width: 0; }
+.tpl-premium .p-bank .p-label { margin-bottom: 8px; }
+.tpl-premium .p-kv2.two { grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); column-gap: 12px; }
+.tpl-premium .p-bank-qr { flex: none; width: 128px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--soft); border-radius: 10px; padding: 8px 6px; }
+.tpl-premium .p-bank-qr b { margin-top: 6px; font-family: Poppins, Arial, sans-serif; font-size: 12px; font-weight: 600; color: var(--navy); }
+.tpl-premium .p-bank-qr small { font-size: 10px; color: var(--muted); }
+.tpl-premium.fit-tight .p-bank { margin-top: 10px; padding: 9px 14px 10px; }
+.page .box.due { margin-top: 4px; }
+.page .pay-terms { margin-top: 8px; font-size: 13px; }
+.page .pay-terms ul { margin: 2px 0 0; padding-left: 20px; }
+.page .pay-terms li { margin: 1px 0; }
+.page table.bank { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.page table.bank > tbody > tr > td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; font-size: 13px; }
+.page table.bank-kv td { padding: 1px 10px 1px 0; font-size: 13px; }
+.page table.bank-kv td.k { color: #555; white-space: nowrap; }

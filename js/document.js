@@ -121,6 +121,29 @@ function supportWhatsApp(S, branch) {
   return (sup.whatsapp || '').trim() || pick('whatsapp') || pick('phone') || ((S.branches || {})[branch] || {}).phone || '';
 }
 
+/* Bank details for payment, kept per branch (Settings → Branches), printed on invoices and order forms. */
+function bankOf(S, branch) {
+  const b = (S.branches || {})[branch] || {};
+  const g = k => String(b[k] || '').trim();
+  const bank = { accountName: g('bankAccountName'), bankName: g('bankName'), accountNo: g('bankAccountNo'), code: g('bankCode'), swift: g('bankSwift'), branchName: g('bankBranch'), upiId: g('upiId') };
+  bank.codeLabel = b.taxLabel === 'VAT' ? 'IBAN' : 'IFSC';
+  return Object.values(bank).some(v => v && v !== bank.codeLabel) ? bank : null;
+}
+/** A UPI payment link (scanned as a QR) for the balance due on an INR document. */
+function upiLink(d, S) {
+  const bank = bankOf(S, d.branch);
+  if (!bank || !bank.upiId || d.currency !== 'INR') return '';
+  const T = docTotals(d);
+  const amt = isPaidInvoice(d) ? 0 : Math.max(0, T.balance);
+  const q = [`pa=${encodeURIComponent(bank.upiId)}`, `pn=${encodeURIComponent(bank.accountName || S.legalName || '')}`, 'cu=INR'];
+  if (amt > 0.004) q.push(`am=${amt.toFixed(2)}`);
+  if (d.number) q.push(`tn=${encodeURIComponent(d.number)}`);
+  return 'upi://pay?' + q.join('&');
+}
+/** Payment terms of a document as lines. */
+const paymentTermLines = d => String(d.paymentTerms || '').split(/\n/).map(x => x.trim()).filter(Boolean);
+const printBank = (d, S) => d.showBank !== false && d.type !== 'quotation' && !!bankOf(S, d.branch);
+
 function infoSection(d, S) {
   const T = docTotals(d);
   const pay = d.payment || {};
@@ -290,7 +313,7 @@ function buildBlocks(d, S) {
   add(`<div class="d-title">
       <div>${d.number ? `<div class="box">${K.short} No: ${esc(d.number)}</div>` : ''}</div>
       <h1>${K.title}${isPaidInvoice(d) ? ' <span class="paid-tag">PAID</span>' : ''}</h1>
-      <div class="right"><div class="box">Date:&nbsp;&nbsp; ${esc(fmtDate(d.date))}</div></div>
+      <div class="right"><div class="box">Date:&nbsp;&nbsp; ${esc(fmtDate(d.date))}</div>${d.type !== 'quotation' && d.dueDate ? `<div class="box due">Due:&nbsp;&nbsp; ${esc(fmtDate(d.dueDate))}</div>` : ''}</div>
     </div>
     <p class="intro${booked ? ' b' : ''}">${booked
       ? 'We are going to book the order as per following details confirmed by you:'
@@ -360,7 +383,14 @@ function buildBlocks(d, S) {
       <tbody>${rows || '<tr><td>&nbsp;</td><td></td></tr>'}${tot}</tbody>
     </table>
     ${d.showWords ? `<p class="words"><b>Amount in words:</b> ${esc(amountInWords(paidInFull || !T.adv ? T.total : T.balance, cur))}</p>` : ''}
-    ${d.type === 'order' && (d.installDate || (d.paymentTerms || '').trim()) ? `<p class="words">${d.installDate ? `<b>Expected installation:</b> ${esc(fmtDate(d.installDate))}` : ''}${d.installDate && d.paymentTerms ? ' &nbsp;&nbsp;|&nbsp;&nbsp; ' : ''}${(d.paymentTerms || '').trim() ? `<b>Payment terms:</b> ${esc(d.paymentTerms)}` : ''}</p>` : ''}`);
+    ${d.type === 'order' && d.installDate ? `<p class="words"><b>Expected installation:</b> ${esc(fmtDate(d.installDate))}</p>` : ''}`);
+  // payment terms and bank details are their own blocks, so they can move to the next page on their own
+  if (paymentTermLines(d).length) add(`<div class="pay-terms"><b>Payment Terms:</b><ul>${paymentTermLines(d).map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>`);
+  if (printBank(d, S)) {
+    const bk = bankOf(S, d.branch); const upi = upiLink(d, S);
+    const r = (k, v) => (v ? `<tr><td class="k">${k}</td><td>${esc(v)}</td></tr>` : '');
+    add(`<table class="bank"><tr><td class="bank-info"><b class="info-h">Bank Details for Payment</b><table class="bank-kv">${r('Account name', bk.accountName)}${r('Bank', bk.bankName)}${r('Account no.', bk.accountNo)}${r(bk.codeLabel, bk.code)}${r('SWIFT', bk.swift)}${r('Branch', bk.branchName)}${r('UPI ID', bk.upiId)}</table></td>${upi ? `<td class="info-qr">${qrImg(upi, 'qr')}<div><b>Scan &amp; Pay</b><br>${esc(cur)} ${fmtMoney(docTotals(d).balance, cur)} via UPI</div></td>` : ''}</tr></table>`);
+  }
 
   if (d.notes && d.notes.trim()) {
     add(`<div class="notes"><b>Note:</b> ${esc(d.notes).replace(/\n/g, '<br>')}</div>`);

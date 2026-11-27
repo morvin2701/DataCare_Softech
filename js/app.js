@@ -158,7 +158,8 @@ function newDoc(type, branch) {
     terms: [...(S.terms[type] || S.terms.invoice)], amcPercent: S.amcPercent, amcMode: S.amcMode || 'percent', amcAmount: S.amcAmount || 0,
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
     showStamp: false, payment: { date: '', mode: '', ref: '' }, payments: [],
-    installDate: '', paymentTerms: '',
+    installDate: '', paymentTerms: (S.paymentTermsDefault || []).join('\n'),
+    dueDate: type === 'invoice' ? addDaysISO(todayISO(), Number(S.dueDays) || 0) : '',
     employee: (USER && USER.displayName) || '', history: [],
     ...typeDefaults(type)
   };
@@ -175,6 +176,8 @@ function normalizeDoc(d) {
   if (d.amcAmount === undefined) d.amcAmount = 0;
   if (d.installDate === undefined) d.installDate = '';
   if (d.paymentTerms === undefined) d.paymentTerms = '';
+  if (d.dueDate === undefined) d.dueDate = '';
+  if (d.showBank === undefined) d.showBank = d.type !== 'quotation';
   if (d.employee === undefined) d.employee = d.createdBy || '';
   if (!Array.isArray(d.history)) d.history = [];
   if (!Array.isArray(d.payments)) d.payments = [];   // payments recorded on the Payments page
@@ -294,9 +297,11 @@ function formHTML(d) {
       <label class="f">Advance received<input type="number" step="any" min="0" data-f="advance"></label>
     </div>
     <div class="row" id="orderRow">
-      <label class="f">Expected installation date<input type="date" data-f="installDate"></label>
-      <label class="f">Payment terms<input data-f="paymentTerms" placeholder="e.g. 50% advance, balance on installation"></label>
+      <label class="f" id="installF">Expected installation date<input type="date" data-f="installDate"></label>
+      <label class="f" id="dueF">Payment due date<input type="date" data-f="dueDate"></label>
     </div>
+    <div class="row one"><label class="f">Payment terms <small class="inl">(printed on the document – one point per line)</small><textarea data-f="paymentTerms" rows="3" placeholder="e.g. 50% advance with the order, balance before installation"></textarea></label></div>
+    <label class="chk" id="bankF"><input type="checkbox" data-f="showBank"> Print bank details &amp; UPI QR code for payment (from Settings → Branches)</label>
     <label class="chk"><input type="checkbox" data-f="taxEnabled"> Add tax</label>
     <div class="row" id="taxRow">
       <label class="f">Tax label<input data-f="taxLabel"></label>
@@ -386,7 +391,9 @@ function syncForm() {
   $('#cityLbl').textContent = uae ? 'Emirate' : 'City';
   $('#taxRow').style.display = doc.taxEnabled ? '' : 'none';
   $('#compOpts').style.display = doc.showComparison ? '' : 'none';
-  $('#orderRow').style.display = doc.type === 'order' ? '' : 'none';
+  $('#orderRow').style.display = doc.type === 'quotation' ? 'none' : '';
+  $('#installF').style.display = doc.type === 'order' ? '' : 'none';
+  $('#bankF').style.display = doc.type === 'quotation' ? 'none' : '';
   $('#amcPctF').style.display = doc.amcMode === 'amount' ? 'none' : '';
   $('#amcAmtF').style.display = doc.amcMode === 'amount' ? '' : 'none';
   $('#amcNow').textContent = amcLabel(doc);
@@ -1604,6 +1611,16 @@ function settingsHTML() {
           ${field('Website', inp(`branches.${k}.website`, `placeholder="${esc(S.website || '')}"`))}
           ${field('Footer line for this branch', inp(`branches.${k}.footerText`, 'placeholder="leave empty to use the footer line from Branding"'), 'Parts separated by |')}
         </div>
+        <div class="branch-sub">Bank details for payment <small>– printed on this branch's invoices and order forms, with a UPI QR code when a UPI ID is given</small></div>
+        <div class="grid2">
+          ${field('Account name', inp(`branches.${k}.bankAccountName`, 'placeholder="e.g. DataCare Softech"'))}
+          ${field('Bank', inp(`branches.${k}.bankName`, 'placeholder="e.g. HDFC Bank"'))}
+          ${field('Account number', inp(`branches.${k}.bankAccountNo`))}
+          ${field(regionInfo(k).country === 'UAE' ? 'IBAN' : 'IFSC code', inp(`branches.${k}.bankCode`))}
+          ${field('SWIFT (optional)', inp(`branches.${k}.bankSwift`))}
+          ${field('Branch (optional)', inp(`branches.${k}.bankBranch`))}
+          ${field('UPI ID (India)', inp(`branches.${k}.upiId`, 'placeholder="e.g. datacare@hdfcbank"'), 'Prints a “Scan & Pay” QR code with the balance due on INR documents')}
+        </div>
       </div>`;
   };
   const usage = storageUsage();
@@ -1682,6 +1699,7 @@ function settingsHTML() {
           ${field('AMC %', inp('amcPercent', 'type="number" step="any" min="0"'), 'Used when AMC is a %')}
           ${field('AMC amount', inp('amcAmount', 'type="number" step="any" min="0"'), 'Used when AMC is a fixed amount')}
           ${field('Software versions', inp('softwareVersions', 'data-csv placeholder="DataCare Next, DataCare Pro"'), 'Comma separated – offered as suggestions')}
+          ${field('Invoice due after (days)', inp('dueDays', 'type="number" min="0" step="1"'), 'Sets the payment due date of a new invoice')}
         </div>
       `)}
 
@@ -1732,6 +1750,8 @@ function settingsHTML() {
             <span class="ta-foot"><em data-count="terms.invoice"></em><button type="button" class="btn link sm" data-resetdef="terms.invoice">Restore original</button></span></label>
           <label class="f">Order form terms &amp; conditions<textarea data-s="terms.order" data-list rows="12"></textarea>
             <span class="ta-foot"><em data-count="terms.order"></em><button type="button" class="btn link sm" data-resetdef="terms.order">Restore original</button></span></label>
+          <label class="f">Payment terms <small class="inl">(printed under the totals; one point per line)</small><textarea data-s="paymentTermsDefault" data-list rows="6"></textarea>
+            <span class="ta-foot"><em data-count="paymentTermsDefault"></em><button type="button" class="btn link sm" data-resetdef="paymentTermsDefault">Restore original</button></span></label>
         </div>
         <div class="grid2" style="margin-top:14px">
           <label class="f">Hardware configuration – quotations (short)<textarea data-s="hardware" data-list rows="9"></textarea>

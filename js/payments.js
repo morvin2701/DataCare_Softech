@@ -12,6 +12,8 @@ const amt = (v, cur) => `${fmtMoney(v, cur, false)}${Number.isInteger(round2(v))
 const money = (v, cur) => `${cur} ${amt(v, cur)}`;                                              // INR 25,000.00
 const lastPayment = d => ((d.payments || []).length ? d.payments[d.payments.length - 1] : null);
 const dayDiff = iso => Math.floor((Date.now() - new Date(iso + 'T00:00:00').getTime()) / 864e5);
+/** When a document's money is due: its due date, else 30 days after its date. */
+const dueBy = d => d.dueDate || addDaysISO(d.date, 30);
 
 /** The invoice an order form was turned into, if any: the order's dues then live on that invoice. */
 function invoiceOf(order) {
@@ -56,11 +58,11 @@ function partyList(within = inPayRegion) {
     p.docs.push(d);
     const f = payFigures(d);
     p.billed = round2(p.billed + f.total); p.received = round2(p.received + f.received); p.due = round2(p.due + f.due);
-    if (f.due > 0.004 && (!p.oldest || d.date < p.oldest)) p.oldest = d.date;
+    if (f.due > 0.004) { p.overdue = Math.max(p.overdue || 0, dayDiff(dueBy(d))); if (!p.oldest || d.date < p.oldest) p.oldest = d.date; }
     for (const pm of d.payments || []) if (pm.date > p.lastPaid) p.lastPaid = pm.date;
   }
   const out = [...map.values()];
-  out.forEach(p => { p.docs.sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || '').localeCompare(b.createdAt || '')); p.overdue = p.oldest ? dayDiff(p.oldest) : 0; });
+  out.forEach(p => { p.docs.sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || '').localeCompare(b.createdAt || '')); p.overdue = p.overdue || 0; });
   return out.sort((a, b) => (b.due - a.due) || a.name.localeCompare(b.name));
 }
 const findParty = key => partyList().find(p => p.key === key) || null;
@@ -98,7 +100,7 @@ function renderPayments() {
   const cur = parties[0] ? parties[0].currency : (SB(payView.region || REGION || 'UAE').branches[payView.region || REGION || 'UAE'] || branchDefaults(payView.region || REGION || 'UAE')).currency;
   const sum = (fn) => round2(parties.reduce((s, p) => s + fn(p), 0));
   const withDue = parties.filter(p => p.due > 0.004);
-  const overdueAmt = sum(p => (p.overdue > 30 ? p.due : 0));
+  const overdueAmt = sum(p => (p.overdue > 0 ? p.due : 0));
   const canRecordHere = !payView.region || canWriteRegion(payView.region);
 
   $('#payRegionTabs').innerHTML = regionTabsHTML(payView.region, r => docs.filter(d => (!r || d.branch === r) && receivable(d) && payFigures(d).due > 0.004).length);
@@ -108,7 +110,7 @@ function renderPayments() {
     <div class="stat"><div class="stat-ic blue">${icon('inv')}</div><div><div class="stat-l">Billed</div><div class="stat-v">${money(sum(p => p.billed), cur)}</div><div class="stat-s">Order forms and invoices, not cancelled</div></div></div>
     <div class="stat"><div class="stat-ic green">${icon('wallet')}</div><div><div class="stat-l">Received</div><div class="stat-v">${money(sum(p => p.received), cur)}</div><div class="stat-s">Advances and recorded payments</div></div></div>
     <div class="stat"><div class="stat-ic orange">${icon('clock')}</div><div><div class="stat-l">Outstanding</div><div class="stat-v">${money(sum(p => p.due), cur)}</div><div class="stat-s">${withDue.length} ${withDue.length === 1 ? 'party owes' : 'parties owe'} money</div></div></div>
-    <div class="stat"><div class="stat-ic red">${icon('clock')}</div><div><div class="stat-l">Overdue 30+ days</div><div class="stat-v">${money(overdueAmt, cur)}</div><div class="stat-s">${parties.filter(p => p.overdue > 30 && p.due > 0.004).length} parties – send a reminder</div></div></div>`;
+    <div class="stat"><div class="stat-ic red">${icon('clock')}</div><div><div class="stat-l">Overdue</div><div class="stat-v">${money(overdueAmt, cur)}</div><div class="stat-s">${parties.filter(p => p.overdue > 0 && p.due > 0.004).length} past the due date – send a reminder</div></div></div>`;
 
   // ---- parties (left) ----
   const q = payView.q.trim().toLowerCase();
@@ -122,7 +124,7 @@ function renderPayments() {
         <div class="party-sub">${[p.city, p.mobile].filter(Boolean).map(esc).join(' · ') || `${p.docs.length} document${p.docs.length === 1 ? '' : 's'}`}</div>
       </div>
       <div class="party-due${p.due > 0.004 ? '' : ' ok'}">${p.due > 0.004 ? money(p.due, p.currency) : 'Paid up'}
-        <small>${p.due > 0.004 ? (p.overdue > 30 ? `<span class="overdue">${p.overdue} days</span>` : `${p.docs.filter(d => payFigures(d).due > 0.004).length} pending`) : `${money(p.received, p.currency)} received`}</small></div>
+        <small>${p.due > 0.004 ? (p.overdue > 0 ? `<span class="overdue">${p.overdue} day${p.overdue === 1 ? '' : 's'} overdue</span>` : `${p.docs.filter(d => payFigures(d).due > 0.004).length} pending`) : `${money(p.received, p.currency)} received`}</small></div>
     </div>`).join('') : `<div class="empty-state small"><h3>${parties.length ? 'No party matches' : 'No order forms or invoices yet'}</h3><p>${parties.length ? 'Try another name, city or mobile, or switch to “All parties”.' : 'Payments are recorded against saved order forms and invoices.'}</p></div>`;
 
   // ---- party detail (right) ----
@@ -175,7 +177,7 @@ function renderPayments() {
     <div class="pay-kpis">
       <div class="pay-kpi"><small>Billed</small><b>${money(p.billed, p.currency)}</b><div class="pay-progress" title="${pct}% received"><i style="width:${pct}%"></i></div></div>
       <div class="pay-kpi"><small>Received</small><b class="got">${money(p.received, p.currency)}</b><span class="pay-kpi-s">${p.lastPaid ? `last on ${esc(niceDate(p.lastPaid))}` : 'no payments yet'}</span></div>
-      <div class="pay-kpi due${p.due > 0.004 ? '' : ' clear'}"><small>Due</small><b>${p.due > 0.004 ? money(p.due, p.currency) : 'Nil'}</b><span class="pay-kpi-s">${p.due > 0.004 ? (p.overdue > 30 ? `<span class="overdue">oldest ${p.overdue} days</span>` : `${p.docs.filter(d => payFigures(d).due > 0.004).length} document${p.docs.filter(d => payFigures(d).due > 0.004).length === 1 ? '' : 's'} pending`) : 'fully paid'}</span></div>
+      <div class="pay-kpi due${p.due > 0.004 ? '' : ' clear'}"><small>Due</small><b>${p.due > 0.004 ? money(p.due, p.currency) : 'Nil'}</b><span class="pay-kpi-s">${p.due > 0.004 ? (p.overdue > 0 ? `<span class="overdue">${p.overdue} day${p.overdue === 1 ? '' : 's'} past due</span>` : `${p.docs.filter(d => payFigures(d).due > 0.004).length} document${p.docs.filter(d => payFigures(d).due > 0.004).length === 1 ? '' : 's'} pending`) : 'fully paid'}</span></div>
     </div>
     <div class="pay-sec">Documents</div>
     <div class="table-wrap"><table class="list pay-docs"><thead><tr><th>Document</th><th>Date</th><th class="num">Total</th><th class="num">Received</th><th class="num">Due</th><th>Status</th><th class="act-col"></th></tr></thead>
@@ -348,7 +350,7 @@ function receiptText(p, r) {
 function reminderText(p) {
   const co = SB(p.branch).companyName || SB(p.branch).legalName;
   const pend = p.docs.filter(d => payFigures(d).due > 0.004);
-  return `Dear ${p.name},\nA gentle reminder from ${co}: ${money(p.due, p.currency)} is pending against ${pend.map(d => `${d.number} (${money(payFigures(d).due, d.currency)})`).join(', ')}.\nKindly arrange the payment at your earliest convenience. Thank you!`;
+  return `Dear ${p.name},\nA gentle reminder from ${co}: ${money(p.due, p.currency)} is pending against ${pend.map(d => `${d.number} (${money(payFigures(d).due, d.currency)}${d.dueDate ? `, due ${fmtDate(d.dueDate)}` : ''})`).join(', ')}.\nKindly arrange the payment at your earliest convenience. Thank you!`;
 }
 
 /* ---------------- receipt (PDF) ---------------- */
