@@ -14,10 +14,14 @@ let USER = null;        // signed-in user (null when the app runs without the se
 let REGION = null;      // team the app is working in: 'UAE' | 'IN' | null = no restriction (no server)
 let ALL_S = null;       // settings of both teams when signed in
 const isAdmin = () => !!USER && USER.role === 'admin';
+const isLead = () => !!USER && USER.role === 'lead';
+/** Administrators and team leads run the teams of their group: members, settings, every document of the group. */
+const canManage = () => isAdmin() || isLead();
+const ROLE_LABEL = { admin: 'Administrator', lead: 'Team Lead', user: 'Member' };
 const SB = br => (ALL_S && ALL_S[br]) || S;                            // settings that apply to a branch
 // administrators change anything in their own group; a separate team's documents are view only for them
-const canEdit = d => !REGION || d.branch === REGION || (isAdmin() && regionCodes().includes(d.branch));
-const canWriteRegion = r => !REGION || USER.homeRegion === r || (isAdmin() && regionCodes().includes(r));
+const canEdit = d => !REGION || d.branch === REGION || (canManage() && regionCodes().includes(d.branch));
+const canWriteRegion = r => !REGION || USER.homeRegion === r || (canManage() && regionCodes().includes(r));
 const regionName = r => regionInfo(r).name.split('·')[0].trim();   // 'UAE', 'India', 'India 2' …
 const regionLong = r => regionInfo(r).name;
 /** "India team" – but a name that already says Team ("Devendra's Team") is used as it is, never "Devendra's Team team". */
@@ -877,7 +881,7 @@ function regionTabsHTML(current, count) {
 function renderRegionTabs() {
   $('#regionTabs').innerHTML = regionTabsHTML(docsView.region, r => docs.filter(d => !r || d.branch === r).length);
   const r = docsView.region;
-  const other = REGION && r && r !== REGION && (!isAdmin() || !regionCodes().includes(r));
+  const other = REGION && r && r !== REGION && (!canManage() || !regionCodes().includes(r));
   $('#regionNote').textContent = other ? `You are viewing the documents of ${theTeam(r)}. They open as view only.` : '';
 }
 
@@ -2039,17 +2043,17 @@ function renderUserChip() {
   menu.hidden = false;
   $('#userAvatar').textContent = USER.displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   $('#userName').textContent = USER.displayName;
-  $('#userRegion').textContent = `${teamLabel(REGION)}${isAdmin() ? ' · Administrator' : ''}`;
-  $('#navTeam').hidden = !isAdmin();
+  $('#userRegion').textContent = `${teamLabel(REGION)}${canManage() ? ' · ' + ROLE_LABEL[USER.role] : ''}`;
+  $('#navTeam').hidden = !canManage();
   const sw = $('#regionSwitch');
   // only the teams of this group (UAE / India); separate teams never appear here – they are managed on the Team page
-  sw.hidden = !isAdmin() || REGION_LIST.length < 2;
+  sw.hidden = !canManage() || REGION_LIST.length < 2;
   sw.innerHTML = REGION_LIST.map(r => `<button type="button" data-region="${r.code}" class="${r.code === REGION ? 'on' : ''}" title="${esc(regionLong(r.code))}"><span class="rs-full">${esc(regionName(r.code))}</span><span class="rs-short">${esc(r.code)}</span></button>`).join('');
 }
 
 /** Administrators can work in either team for the current session. */
 async function switchRegion(r) {
-  if (r === REGION || !isAdmin()) return;
+  if (r === REGION || !canManage()) return;
   if (!(await confirmDiscard())) return;
   try { await API.setRegion(r); } catch (err) { toast(err.message, true); return; }
   if (regionGroupOf(r) !== regionGroupOf(REGION)) {
@@ -2146,7 +2150,7 @@ function formDialog({ title, fields, ok = 'Save', submit }) {
 let teamUsers = [];
 async function renderTeam() {
   const p = $('#teamPanel');
-  if (!isAdmin()) { p.innerHTML = '<div class="empty-state"><h3>Administrators only</h3></div>'; return; }
+  if (!canManage()) { p.innerHTML = '<div class="empty-state"><h3>Team leads and administrators only</h3></div>'; return; }
   p.innerHTML = `<div class="page-head"><div><h2>Team</h2><p class="page-sub">Loading…</p></div></div>`;
   try { teamUsers = await API.users(); } catch (err) { p.innerHTML = `<div class="empty-state"><h3>Could not load team</h3><p>${esc(err.message)}</p></div>`; return; }
   const fmtWhen = iso => (iso ? niceDate(String(iso).slice(0, 10)) : 'Never');
@@ -2154,13 +2158,13 @@ async function renderTeam() {
       <tr data-uid="${u.id}" class="${u.active ? '' : 'inactive'}">
         <td><div class="cell-main"><span class="avatar sm">${esc(u.displayName.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase())}</span>${esc(u.displayName)}</div><div class="cell-sub">@${esc(u.username)}</div></td>
         <td>${esc(u.phone) || '<i class="muted">—</i>'}</td>
-        <td><span class="role-badge ${u.role}">${u.role === 'admin' ? 'Administrator' : 'Member'}</span></td>
+        <td><span class="role-badge ${u.role}">${ROLE_LABEL[u.role] || 'Member'}</span></td>
         <td class="nowrap">${fmtWhen(u.lastLoginAt)}</td>
         <td>${u.active ? '<span class="badge s-Paid">Active</span>' : '<span class="badge">Deactivated</span>'}</td>
-        <td class="act-col"><div class="acts">
+        <td class="act-col"><div class="acts">${u.role === 'admin' && !isAdmin() ? '<span class="muted small">administrator</span>' : `
           <button class="icon-act" data-uact="edit" title="Edit">${icon('edit')}</button>
           <button class="icon-act" data-uact="pw" title="Set a new password">${icon('key')}</button>
-          ${u.active ? `<button class="icon-act danger" data-uact="off" title="Deactivate (cannot sign in)">${icon('ban')}</button>` : `<button class="icon-act" data-uact="on" title="Re-activate">${icon('check')}</button>`}
+          ${u.active ? `<button class="icon-act danger" data-uact="off" title="Deactivate (cannot sign in)">${icon('ban')}</button>` : `<button class="icon-act" data-uact="on" title="Re-activate">${icon('check')}</button>`}`}
         </div></td>
       </tr>`).join('') || `<tr><td colspan="6" class="empty">No members yet. Use “+ Add member” to add people to ${esc(teamLabel(region, true))}.</td></tr>`;
   const section = region => `
@@ -2175,7 +2179,7 @@ async function renderTeam() {
   p.innerHTML = `
     <div class="page-head">
       <div><h2>Team</h2><p class="page-sub">People who can sign in. Each member belongs to one team; their name and mobile are used as “Prepared by” on their documents.</p></div>
-      <div class="page-actions"><button class="btn" id="addRegionBtn" title="Add a separate team that cannot see the others">+ New separate team</button></div>
+      <div class="page-actions">${isAdmin() ? '<button class="btn" id="addRegionBtn" title="Add a separate team that cannot see the others">+ New separate team</button>' : ''}</div>
     </div>
     ${regionCodes().map(section).join('')}
     ${separate.length ? `<div class="team-sep"><h3>Separate teams</h3><p class="page-sub">Each of these sees only its own documents, settings and people, and none of the teams above. They sign in from their own login link.</p></div>${separate.map(section).join('')}` : ''}`;
@@ -2216,7 +2220,8 @@ function userFields(u = {}) {
     { name: 'phone', label: 'Mobile (shown on documents)', value: u.phone, type: 'tel', placeholder: '+971 55 …' },
     { name: 'username', label: 'Username', value: u.username, required: true, hint: 'Used to sign in; letters, numbers, dots or dashes' },
     { name: 'region', label: 'Team', type: 'select', value: u.region || REGION || regionCodes()[0], options: (u.region && !regionCodes().includes(u.region) ? [u.region] : regionCodes()).map(c => [c, regionLong(c)]) },
-    { name: 'role', label: 'Role', type: 'select', value: u.role || 'user', options: [['user', 'Member'], ['admin', 'Administrator']] }
+    // a team lead can make members and other leads of the group; only an administrator makes administrators
+    { name: 'role', label: 'Role', type: 'select', value: u.role || 'user', options: [['user', 'Member'], ['lead', 'Team Lead – runs this group'], ...(isAdmin() ? [['admin', 'Administrator – every team']] : [])] }
   ];
 }
 

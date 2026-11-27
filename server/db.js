@@ -223,7 +223,7 @@ function validUser(u, { requirePassword }) {
   if (!/^[a-z0-9._-]{3,60}$/i.test(u.username || '')) errors.push('Username: 3–60 letters, numbers, dots, dashes or underscores.');
   if (!(u.displayName || '').trim()) errors.push('Name is required.');
   if (!REGIONS.includes(u.region)) errors.push(`Team must be one of: ${REGIONS.join(', ')}.`);
-  if (!['admin', 'user'].includes(u.role)) errors.push('Role must be admin or user.');
+  if (!['admin', 'lead', 'user'].includes(u.role)) errors.push('Role must be admin, lead or user.');
   if (requirePassword && String(u.password || '').length < 6) errors.push('Password must be at least 6 characters.');
   return errors;
 }
@@ -283,7 +283,7 @@ async function login(username, password, region) {
   // A member always signs in to their own team, whichever team was picked on the sign-in page: the password proves
   // who they are, so a wrong pick (or a separate team's member using the normal address) just works.
   // An administrator may pick any team of their own group to work in; anything else falls back to their own team.
-  const useRegion = row.Role === 'admin' && REGIONS.includes(region) && regionGroup(region) === regionGroup(row.Region) ? region : row.Region;
+  const useRegion = (row.Role === 'admin' || row.Role === 'lead') && REGIONS.includes(region) && regionGroup(region) === regionGroup(row.Region) ? region : row.Region;
   const token = crypto.randomBytes(32).toString('base64url');
   await pool.request().input('t', sql.NVarChar(80), token).input('id', sql.Int, row.Id).input('r', sql.NVarChar(8), useRegion)
     .input('exp', sql.DateTime2, new Date(Date.now() + SESSION_DAYS * 864e5))
@@ -300,7 +300,7 @@ async function sessionUser(token) {
     WHERE s.Token = @t AND s.ExpiresAt > SYSUTCDATETIME() AND u.Active = 1`);
   const row = r.recordset[0];
   if (!row) return null;
-  return { ...publicUser(row), region: row.Role === 'admin' ? row.SessionRegion : row.Region, homeRegion: row.Region };
+  return { ...publicUser(row), region: row.Role === 'admin' || row.Role === 'lead' ? row.SessionRegion : row.Region, homeRegion: row.Region };
 }
 
 async function setSessionRegion(token, region) {

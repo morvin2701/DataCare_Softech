@@ -69,8 +69,11 @@ app.use('/api', wrap(async (req, res, next) => {
 }));
 const requireUser = (req, res, next) => (req.user ? next() : res.status(401).json({ error: 'sign in required' }));
 const requireAdmin = (req, res, next) => (req.user && req.user.role === 'admin' ? next() : res.status(403).json({ error: 'administrator only' }));
+// a team lead runs their own group (UAE + India, or a separate team): members, settings, documents – never another group
+const manages = user => !!user && (user.role === 'admin' || user.role === 'lead');
+const requireManager = (req, res, next) => (manages(req.user) ? next() : res.status(403).json({ error: 'team lead or administrator only' }));
 /** The visibility group a request may see: a member's own; for an admin, the group of the team they are working in. */
-const groupOf = user => db.regionGroup(user.role === 'admin' ? user.region : user.homeRegion);
+const groupOf = user => db.regionGroup(manages(user) ? user.region : user.homeRegion);
 const canSeeRegion = (user, region) => db.regionGroup(region) === groupOf(user);
 // Administrators of the original group (the company's own UAE/India teams) manage every team; an administrator
 // created inside a separate team manages that team's group only, and never learns of the others.
@@ -79,7 +82,7 @@ const managesAllTeams = user => user.role === 'admin' && db.regionGroup(user.hom
 const canManagePeopleOf = (user, region) => managesAllTeams(user) || canSeeRegion(user, region);
 // reading: an owner administrator sees every team's documents (separate teams view only); others only their group
 const canViewRegion = (user, region) => managesAllTeams(user) || canSeeRegion(user, region);
-const canWriteRegion = (user, region) => (user.role === 'admin' && canSeeRegion(user, region)) || user.homeRegion === region;
+const canWriteRegion = (user, region) => (manages(user) && canSeeRegion(user, region)) || user.homeRegion === region;
 
 // slow down password guessing: 10 failures per IP per 15 minutes
 const loginFails = new Map();
@@ -143,7 +146,7 @@ app.get('/api/auth/me', wrap(async (req, res) => {
 }));
 
 // administrators can work in either region for the current session
-app.post('/api/auth/region', requireUser, requireAdmin, wrap(async (req, res) => {
+app.post('/api/auth/region', requireUser, requireManager, wrap(async (req, res) => {
   const { region } = req.body || {};
   if (!db.REGIONS.includes(region)) throw fail(400, 'unknown team');
   if (!managesAllTeams(req.user) && db.regionGroup(region) !== db.regionGroup(req.user.homeRegion)) throw fail(403, 'This team is not yours to manage.');
@@ -172,20 +175,22 @@ app.get('/api/contacts', requireUser, wrap(async (req, res) => {
 
 /* ---------- users (admin) ---------- */
 // the Team page of an owner administrator lists every team's people (separate teams in their own sections)
-app.get('/api/users', requireUser, requireAdmin, wrap(async (req, res) => res.json(await db.listUsers(managesAllTeams(req.user) ? null : groupOf(req.user)))));
+app.get('/api/users', requireUser, requireManager, wrap(async (req, res) => res.json(await db.listUsers(managesAllTeams(req.user) ? null : groupOf(req.user)))));
 
-app.post('/api/users', requireUser, requireAdmin, wrap(async (req, res) => {
+app.post('/api/users', requireUser, requireManager, wrap(async (req, res) => {
+  if (req.user.role !== 'admin' && (req.body || {}).role === 'admin') throw fail(403, 'Only an administrator can create administrators.');
   if (req.body && req.body.region && !canManagePeopleOf(req.user, req.body.region)) throw fail(403, 'That team is outside the group you are working in.');
   try { res.json(await db.createUser(req.body || {})); }
   catch (err) { if (db.isDuplicate(err)) throw fail(409, 'That username is already taken.'); throw err; }
 }));
 
-app.put('/api/users/:id', requireUser, requireAdmin, wrap(async (req, res) => {
+app.put('/api/users/:id', requireUser, requireManager, wrap(async (req, res) => {
   const id = Number(req.params.id);
   const body = req.body || {};
   const existing = await db.getUser(id);
   if (!existing) throw fail(404, 'user not found');
   if (!canManagePeopleOf(req.user, existing.Region)) throw fail(404, 'user not found');
+  if (req.user.role !== 'admin' && (existing.Role === 'admin' || body.role === 'admin')) throw fail(403, 'Only an administrator can change an administrator account.');
   // a person stays inside their own group: moving between groups would hand them the other group's documents
   if (body.region && db.regionGroup(body.region) !== db.regionGroup(existing.Region)) throw fail(403, 'A member cannot be moved to a separate team.');
   if (body.region && !canManagePeopleOf(req.user, body.region)) throw fail(403, 'That team is outside the group you are working in.');
@@ -197,9 +202,10 @@ app.put('/api/users/:id', requireUser, requireAdmin, wrap(async (req, res) => {
   catch (err) { if (db.isDuplicate(err)) throw fail(409, 'That username is already taken.'); throw err; }
 }));
 
-app.post('/api/users/:id/password', requireUser, requireAdmin, wrap(async (req, res) => {
+app.post('/api/users/:id/password', requireUser, requireManager, wrap(async (req, res) => {
   const target = await db.getUser(Number(req.params.id));
   if (!target || !canManagePeopleOf(req.user, target.Region)) throw fail(404, 'user not found');
+  if (req.user.role !== 'admin' && target.Role === 'admin') throw fail(403, 'Only an administrator can change an administrator account.');
   await db.setPassword(Number(req.params.id), (req.body || {}).password);
   res.json({ ok: true });
 }));
