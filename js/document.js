@@ -503,9 +503,9 @@ function renderPages(d, S, container) {
     const tight = layout(true);
     if (!tight.ok && tight.pages >= normal.pages) normal = layout(false); else normal = tight;
   }
-  // a page limit: an order form is never longer than 4 pages – tighter spacing first, then the content is drawn
-  // smaller step by step until it fits
-  const MAX_PAGES = { order: 4 };
+  // a page limit: order forms and invoices are never longer than 4 pages – tighter spacing first, then the content
+  // is drawn smaller step by step until it fits
+  const MAX_PAGES = { order: 4, invoice: 4 };
   const max = MAX_PAGES[d.type];
   if (max && normal.pages > max) {
     let r = layout(true);
