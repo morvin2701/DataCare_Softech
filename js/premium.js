@@ -51,10 +51,11 @@ function brandName(S) {
 function premiumHeader(d, S, first) {
   const isInv = d.type === 'invoice';
   const title = kindOf(d.type).title;
+  const addr = first ? String(((S.branches || {})[d.branch] || {}).address || '').trim() : '';   // the issuing branch's office address
   const brand = S.logo && S.logoHasName
-    ? `<img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">`
+    ? `<div class="p-brand-col"><img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">${addr ? `<div class="p-addr">${esc(addr)}</div>` : ''}</div>`
     : `<div class="p-brand">${brandMark(S, first ? 64 : 36)}
-         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(headerTagline(S))}</div>` : ''}</div>
+         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(headerTagline(S))}</div>` : ''}${addr ? `<div class="p-addr">${esc(addr)}</div>` : ''}</div>
        </div>`;
 
   if (!first) {

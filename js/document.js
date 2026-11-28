@@ -270,6 +270,7 @@ function headerHTML(d, S) {
         <div class="web"><span class="sq"></span>${esc(S.website)}</div>
         ${contact(other)}
       </div>
+      ${(S.branches[d.branch] || {}).address ? `<div class="addr-line">${esc(S.branches[d.branch].address)}</div>` : ''}
     </div>`;
 }
 
@@ -476,7 +477,7 @@ function signStripHTML(d, S) {
 
 function newPageEl(d, S) {
   const page = document.createElement('div');
-  page.className = `page doc-${d.type}${signEveryPage(d) ? ' sign-every' : ''}`;
+  page.className = `page doc-${d.type}${signEveryPage(d) ? ' sign-every' : ''}${(S.branches[d.branch] || {}).address ? ' has-addr' : ''}`;
   page.style.setProperty('--accent', S.accent || '#E8772E');
   page.innerHTML = `<div class="pg-head">${headerHTML(d, S)}</div><div class="pg-body"></div><div class="pg-foot">${signStripHTML(d, S)}${footerHTML(d, S)}</div>`;
   return page;
