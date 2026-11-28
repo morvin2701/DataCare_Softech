@@ -126,7 +126,7 @@ const DEFAULT_SETTINGS = {
   accent: '#E8772E',
   branches: {
     UAE: { label: 'UAE', phone: '+971 55 176 0454', address: 'Dubai, U.A.E.', currency: 'AED', taxLabel: 'VAT', taxRate: 5, taxId: '' },
-    IN:  { label: 'INDIA', phone: '+91 87581 11027', address: 'Ahmedabad, Gujarat, India', currency: 'INR', taxLabel: 'GST', taxRate: 18, taxId: '' }
+    IN:  { label: 'INDIA', phone: '+91 87581 11027', address: '1019, STC (Shivam Trade Center), Beside One World West, Nr. Vakil Saheb Bridge, S. P. Ring Road, Bopal, Ahmedabad, Gujarat 380058', currency: 'INR', taxLabel: 'GST', taxRate: 18, taxId: '' }
   },
   // Support box + QR code printed on documents. Empty phone / WhatsApp = the issuing branch's number.
   support: { phone: '', whatsapp: '', hours: 'Monday to Saturday, 10:00 AM to 7:00 PM (Sunday closed)', rows: null },   // rows: the printed Support lines, user-defined (null = built from the fields above)
