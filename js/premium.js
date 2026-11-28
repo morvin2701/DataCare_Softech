@@ -85,13 +85,13 @@ function premiumHeader(d, S, first) {
     </div>`;
   return `${P_STRIP_TOP}
     ${head}
-    <div class="p-contacts">
+    <div class="p-contacts${addr ? ' has-addr' : ''}"${addr ? ` style="--ct-cols:${(() => { const v = [own.phone, other.phone, S.website, S.email].filter(Boolean); return v.length === 4 && v.some(x => String(x).length > 24) ? 2 : v.length; })()}"` : ''}>
       ${ct(P_ICON.pin, `${own.label} Office`, own.phone)}
       ${ct(P_ICON.pin, `${other.label} Office`, other.phone)}
       ${ct(P_ICON.web, 'Website', S.website)}
       ${ct(P_ICON.mail, 'Email', S.email)}
-    </div>
-    ${addr ? `<div class="p-addrbar">${P_ICON.pin}<span>${esc(addr)}</span></div>` : ''}`;
+      ${addr ? `<div class="p-ct p-ct-addr">${P_ICON.pin}<div><small>Office Address</small><b>${esc(addr)}</b></div></div>` : ''}
+    </div>`;
 }
 
 function premiumFooter(d, S) {
@@ -315,7 +315,7 @@ function buildBlocksPremium(d, S) {
 function fitContacts(page) {
   const bar = page.querySelector('.p-contacts');
   if (!bar) return;
-  const over = () => bar.scrollWidth > bar.clientWidth + 1;
+  const over = () => !bar.classList.contains('has-addr') && bar.scrollWidth > bar.clientWidth + 1;
   for (let fs = 12.5; over() && fs > 11; fs -= 0.5) bar.style.setProperty('--ct-fs', (fs - 0.5) + 'px');
   if (over()) {
     bar.style.removeProperty('--ct-fs');
@@ -331,9 +331,7 @@ function fitContacts(page) {
   const headBottom = headEls.length ? px(Math.max(...headEls.map(el => el.getBoundingClientRect().bottom)) - pr.top) : 0;
   let top = parseFloat(getComputedStyle(bar).top) || 136;
   if (headBottom + 8 > top) { top = headBottom + 8; bar.style.top = top + 'px'; }
-  let bottom = top + px(bar.getBoundingClientRect().height);
-  const addr = page.querySelector('.p-addrbar');
-  if (addr) { addr.style.top = (bottom + 4) + 'px'; bottom = bottom + 4 + px(addr.getBoundingClientRect().height); }
+  const bottom = top + px(bar.getBoundingClientRect().height);
   const body = page.querySelector('.pg-body.first');
   if (body) body.style.top = (bottom + 14) + 'px';
 }

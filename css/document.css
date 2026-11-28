@@ -644,10 +644,12 @@
 .tpl-premium.doc-amc .p-sigbox .p-stamp-img { height: 70px; max-height: 70px; width: auto; max-width: 160px; }
 .tpl-premium.doc-amc .p-amc-contact { min-height: 74px; }
 
-/* company (branch) address: one line under the contacts bar on the first page */
-.tpl-premium .p-addrbar { position: absolute; left: 48px; right: 48px; top: 190px; display: flex; align-items: flex-start; gap: 8px; font-size: 11px; line-height: 1.35; color: var(--muted); padding: 0 6px; }
-.tpl-premium .p-addrbar .p-ic { width: 22px; height: 22px; flex: none; margin-top: -3px; }
-.tpl-premium .p-addrbar span { min-width: 0; }
+/* company (branch) address: a full-width row inside the contacts bar on the first page */
+.tpl-premium .p-contacts.has-addr { display: grid; grid-template-columns: repeat(var(--ct-cols, 4), minmax(0, 1fr)); gap: 8px 14px; align-items: start; }
+.tpl-premium .p-contacts.has-addr .p-ct { min-width: 0; }
+.tpl-premium .p-contacts.has-addr .p-ct b { white-space: normal; overflow-wrap: anywhere; }
+.tpl-premium .p-contacts.has-addr .p-ct-addr { grid-column: 1 / -1; border-top: 1px solid var(--hair); padding-top: 8px; }
+.tpl-premium .p-contacts.has-addr .p-ct-addr b { font-weight: 500; font-size: 11.5px; line-height: 1.35; white-space: normal; }
 .page .addr-line { font-size: 10.5px; color: #555; text-align: center; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .page.has-addr .pg-body { top: 182px; }   /* classic: the address line under the header needs a little more room */
 .page .foot-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* classic footer stays one line */
