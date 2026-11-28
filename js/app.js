@@ -153,7 +153,7 @@ function newDoc(type, branch) {
     softwareVersion: S.softwareVersions[0] || 'DataCare Next',
     edition: '', showEditions: true, showComparison: false, compHideCols: [], compHideRows: [],
     items: [{ desc: '', amount: 0 }],
-    discount: 0, taxEnabled: false, taxLabel: b.taxLabel, taxRate: b.taxRate, advance: 0,
+    discount: 0, taxEnabled: type === 'amc', taxLabel: b.taxLabel, taxRate: b.taxRate, advance: 0,
     notes: '', hardware: defaultHardware(type),
     terms: [...(S.terms[type] || S.terms.invoice)], amcPercent: S.amcPercent, amcMode: S.amcMode || 'percent', amcAmount: S.amcAmount || 0,
     preparedBy: (USER && USER.displayName) || S.preparedBy, preparedMobile: (USER && USER.phone) || b.phone,
@@ -163,6 +163,7 @@ function newDoc(type, branch) {
     employee: (USER && USER.displayName) || '', history: [],
     ...typeDefaults(type)
   };
+  if (type === 'amc') { ensureAmc(d, S); d.amc.amount = Number(S.amcAmount) || 0; syncAmcItems(d); }
   const saved = doc; doc = d; refreshAutoNumber(); doc = saved;
   return d;
 }
@@ -177,6 +178,7 @@ function normalizeDoc(d) {
   if (d.installDate === undefined) d.installDate = '';
   if (d.paymentTerms === undefined) d.paymentTerms = '';
   if (d.dueDate === undefined) d.dueDate = '';
+  if (d.type === 'amc') ensureAmc(d, S);
   if (d.showBank === undefined) d.showBank = d.type !== 'quotation';
   if (d.employee === undefined) d.employee = d.createdBy || '';
   if (!Array.isArray(d.history)) d.history = [];
@@ -230,8 +232,8 @@ function formHTML(d) {
   </div>` : ''}
   <fieldset class="fs"><legend>Document</legend>
     <div class="row one">
-      <div><div class="hint">Type</div><div class="seg seg3" data-seg="type">
-        <button type="button" data-v="quotation">Quotation</button><button type="button" data-v="order">Order Form</button><button type="button" data-v="invoice">Invoice</button></div></div>
+      <div><div class="hint">Type</div><div class="seg seg3 seg4" data-seg="type">
+        <button type="button" data-v="quotation">Quotation</button><button type="button" data-v="order">Order Form</button><button type="button" data-v="invoice">Invoice</button><button type="button" data-v="amc">AMC Letter</button></div></div>
     </div>
     <div class="row one">
       <div class="branch-line"><div class="hint">Issuing branch</div>${REGION
@@ -273,7 +275,34 @@ function formHTML(d) {
     <datalist id="countryList"><option value="UAE"><option value="India"><option value="Oman"><option value="Qatar"><option value="Saudi Arabia"><option value="Bahrain"><option value="Kuwait"></datalist>
   </fieldset>
 
-  <fieldset class="fs"><legend>Software &amp; Version</legend>
+  <fieldset class="fs" id="fsAmc"><legend>A.M.C. Details</legend>
+    <div class="row">
+      <label class="f">License No.<input data-f="amc.licenseNo" placeholder="e.g. VK070NS"></label>
+      <label class="f">Install date<input type="date" data-f="amc.installDate"></label>
+    </div>
+    <div class="row">
+      <label class="f">AMC from<input type="date" data-f="amc.from"></label>
+      <label class="f">AMC to<input type="date" data-f="amc.to"></label>
+    </div>
+    <div class="hint" id="amcPeriodHint"></div>
+    <div class="row">
+      <label class="f">A.M.C. amount (${esc(d.currency)})<input type="number" step="any" min="0" data-f="amc.amount"></label>
+      <label class="f">Software<input data-f="softwareVersion" list="verList2"></label>
+    </div>
+    <datalist id="verList2">${S.softwareVersions.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+    <label class="chk"><input type="checkbox" data-f="taxEnabled"> Add ${esc(d.taxLabel || 'tax')} (${esc(String(d.taxRate || 0))}%)</label>
+    <label class="chk"><input type="checkbox" data-f="showBank"> Print bank details &amp; UPI QR code (from Settings → Branches)</label>
+    <label class="chk"><input type="checkbox" data-f="showWords"> Show amount in words</label>
+    <div class="row one"><label class="f">Subject<input data-f="amcText.subject"></label></div>
+    <div class="row one"><label class="f">Opening line<textarea data-f="amcText.intro" rows="2"></textarea></label></div>
+    <div class="row one"><label class="f">Letter body<textarea data-f="amcText.body" rows="3"></textarea></label></div>
+    <div class="row one"><label class="f">Advantages of A.M.C. <small class="inl">(one per line)</small><textarea data-f="amcText.advantages" data-list rows="5"></textarea></label></div>
+    <div class="row one"><label class="f">Note<textarea data-f="amcText.note" rows="2"></textarea></label></div>
+    <div class="row one"><label class="f">Closing lines <small class="inl">(one per line)</small><textarea data-f="amcText.closing" data-list rows="2"></textarea></label></div>
+    <div class="sum-box" id="amcSumBox"></div>
+  </fieldset>
+
+  <fieldset class="fs" id="fsSoft"><legend>Software &amp; Version</legend>
     <div class="row">
       <label class="f">Software<input data-f="softwareVersion" list="verList"></label>
       <label class="f">Version<select data-f="edition"><option value="">— choose —</option>${editionList(S).map(e => opt(e, e, d.edition)).join('')}</select></label>
@@ -285,7 +314,7 @@ function formHTML(d) {
     <div id="compOpts" class="comp-opts"></div>
   </fieldset>
 
-  <fieldset class="fs"><legend>Order Details</legend>
+  <fieldset class="fs" id="fsItems"><legend>Order Details</legend>
     <div class="hint" style="display:flex;justify-content:space-between"><span>Description</span><span style="margin-right:40px">Price</span></div>
     <div id="items"></div>
     <div class="items-actions">
@@ -320,13 +349,13 @@ function formHTML(d) {
     <div class="row one" style="margin-top:10px"><label class="f">Note (optional, printed below the table)<textarea data-f="notes" rows="2" style="min-height:48px"></textarea></label></div>
   </fieldset>
 
-  <fieldset class="fs"><legend>Hardware Configuration</legend>
+  <fieldset class="fs" id="fsHw"><legend>Hardware Configuration</legend>
     <label class="chk"><input type="checkbox" data-f="showHardware"> Show hardware configuration</label>
     <label class="f">One point per line. Write <code>Title: text</code> to print the title in bold.<textarea data-f="hardware" data-list rows="${d.type === 'quotation' ? 4 : 8}"></textarea></label>
     <button type="button" class="btn link" id="resetHw">Reset to default ${d.type === 'quotation' ? 'quotation (short)' : 'detailed'} list</button>
   </fieldset>
 
-  <fieldset class="fs"><legend>Terms &amp; Conditions</legend>
+  <fieldset class="fs" id="fsTerms"><legend>Terms &amp; Conditions</legend>
     <div class="row">
       <label class="f">AMC<select data-f="amcMode">${opt('percent', '% of software price', d.amcMode)}${opt('amount', 'Fixed amount per year', d.amcMode)}</select></label>
       <label class="f" id="amcPctF">AMC %<input type="number" step="any" min="0" data-f="amcPercent"></label>
@@ -342,9 +371,9 @@ function formHTML(d) {
       <label class="f">Prepared By<input data-f="preparedBy"></label>
       <label class="f">Mobile<input data-f="preparedMobile"></label>
     </div>
-    <label class="chk"><input type="checkbox" data-f="showSupport"> Show support details &amp; QR code <span class="hint">(numbers are set in Settings → Support &amp; QR)</span></label>
-    <label class="chk"><input type="checkbox" data-f="showAcceptance"> Show “Read and accepted…” customer signature block</label>
-    <label class="chk"><input type="checkbox" data-f="signEveryPage"> Signature lines (company &amp; customer) at the foot of every page</label>
+    <label class="chk" id="supportF"><input type="checkbox" data-f="showSupport"> Show support details &amp; QR code <span class="hint">(numbers are set in Settings → Support &amp; QR)</span></label>
+    <label class="chk" id="acceptF"><input type="checkbox" data-f="showAcceptance"> Show “Read and accepted…” customer signature block</label>
+    <label class="chk" id="signEveryF"><input type="checkbox" data-f="signEveryPage"> Signature lines (company &amp; customer) at the foot of every page</label>
     <label class="chk"><input type="checkbox" data-f="showStamp" ${S.stamp ? '' : 'disabled'}> Show company stamp / signature ${S.stamp ? '' : '<span class="hint">(upload one in Settings)</span>'}</label>
   </fieldset>`;
 }
@@ -391,7 +420,11 @@ function syncForm() {
   $('#cityLbl').textContent = uae ? 'Emirate' : 'City';
   $('#taxRow').style.display = doc.taxEnabled ? '' : 'none';
   $('#compOpts').style.display = doc.showComparison ? '' : 'none';
-  $('#orderRow').style.display = doc.type === 'quotation' ? 'none' : '';
+  const amc = doc.type === 'amc';
+  ['fsItems', 'fsSoft', 'fsHw', 'fsTerms', 'supportF', 'acceptF', 'signEveryF'].forEach(id => { const el = $('#' + id); if (el) el.style.display = amc ? 'none' : ''; });
+  $('#fsAmc').style.display = amc ? '' : 'none';
+  if (amc) { const a = doc.amc || {}; const left = daysUntil(a.to); $('#amcPeriodHint').textContent = a.from && a.to ? `Financial year ${fyLabel(a.from)} · ${left === null ? '' : left < 0 ? `expired ${-left} days ago` : `${left} days left`}` : ''; }
+  $('#orderRow').style.display = doc.type === 'quotation' || amc ? 'none' : '';
   $('#installF').style.display = doc.type === 'order' ? '' : 'none';
   $('#bankF').style.display = doc.type === 'quotation' ? 'none' : '';
   $('#amcPctF').style.display = doc.amcMode === 'amount' ? 'none' : '';
@@ -483,6 +516,7 @@ function updateSum() {
     if (t.adv) h += line(ord ? 'Balance payable' : 'Balance due', t.balance, 't');
   }
   $('#sumBox').innerHTML = h;
+  const ab = $('#amcSumBox'); if (ab) ab.innerHTML = doc.type === 'amc' ? h.replace('Sub total', 'A.M.C. amount').replace('Total payable', 'Payable amount') : '';
 }
 
 function customerIndex() {
@@ -512,6 +546,10 @@ function onField(f, el) {
     refreshAutoNumber();
   } else if (f === 'edition' || f === 'showComparison') {
     refreshCompOpts();
+  } else if (f === 'amc.from') {
+    doc.amc.to = addYearISO(doc.amc.from); syncAmcItems(doc); syncForm();
+  } else if (f.startsWith('amc.') || (doc.type === 'amc' && f === 'softwareVersion')) {
+    syncAmcItems(doc); syncForm();
   } else if (f === 'advance' && doc.type === 'order' && Number(doc.advance) > 0 && !doc.payment.date) {
     doc.payment.date = todayISO();
   } else if (f === 'status' && doc.type === 'order') {
@@ -544,6 +582,7 @@ function setType(t) {
   const { showWords, ...flags } = typeDefaults(t);   // amount in words is left as the user set it
   Object.assign(doc, { type: t, ...flags });
   if (!STATUSES[t].includes(doc.status)) doc.status = STATUSES[t][0];
+  if (t === 'amc') { ensureAmc(doc, S); if (!doc.amc.amount) doc.amc.amount = doc.amcMode === 'amount' ? Number(doc.amcAmount) || 0 : round2(doc.items.reduce((s, it) => s + (Number(it.amount) || 0), 0) * (Number(doc.amcPercent) || 0) / 100); doc.taxEnabled = true; doc.showWords = true; syncAmcItems(doc); }
   if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
 }
 
@@ -703,6 +742,7 @@ function saveDoc(silent = false) {
   refreshCustomerList();
   renderPreview();
   if (!silent) toast(`Saved ${kindOf(doc.type).lower} ${doc.number}`);
+  if (typeof renderAmcBanner === 'function') renderAmcBanner();
   return true;
 }
 
@@ -934,7 +974,7 @@ function renderDocs() {
   renderRegionTabs();
   renderStats();
   const scoped = docs.filter(inRegion);
-  const counts = { '': scoped.length, quotation: scoped.filter(d => d.type === 'quotation').length, order: scoped.filter(d => d.type === 'order').length, invoice: scoped.filter(d => d.type === 'invoice').length };
+  const counts = { amc: scoped.filter(d => d.type === 'amc').length, '': scoped.length, quotation: scoped.filter(d => d.type === 'quotation').length, order: scoped.filter(d => d.type === 'order').length, invoice: scoped.filter(d => d.type === 'invoice').length };
   $$('#docTabs button').forEach(b => {
     b.classList.toggle('on', b.dataset.t === docsView.tab);
     b.querySelector('span').textContent = counts[b.dataset.t];
@@ -1009,7 +1049,7 @@ function renderDocs() {
           ${act('pdf', 'pdf', 'Download PDF')}
           ${act('dup', 'copy', 'Duplicate')}
           ${d.type === 'quotation' ? act('order', 'order', 'Make order form') : '<span class="icon-gap"></span>'}
-          ${d.type !== 'invoice' ? act('convert', 'convert', 'Make invoice') : '<span class="icon-gap"></span>'}
+          ${d.type === 'quotation' || d.type === 'order' ? act('convert', 'convert', 'Make invoice') : d.type === 'invoice' ? act('amc', 'clock', 'Make AMC reminder letter') : '<span class="icon-gap"></span>'}
           ${act('del', 'trash', 'Delete', 'danger')}` : `
           ${act('open', 'eye', 'View (other team)')}
           ${act('pdf', 'pdf', 'Download PDF')}
@@ -1041,6 +1081,15 @@ function copyAsNew(src, type) {
       hardware: JSON.stringify(src.hardware) === JSON.stringify(defaultHardware(src.type)) ? defaultHardware(type) : src.hardware,
       ...typeDefaults(type)
     });
+    if (type === 'amc') {
+      ensureAmc(d, S);
+      const soft = src.items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+      d.amc.amount = src.amcMode === 'amount' ? Number(src.amcAmount) || 0 : round2(soft * (Number(src.amcPercent) || 0) / 100);
+      d.amc.installDate = src.installDate || src.date || '';
+      d.amc.from = todayISO(); d.amc.to = addYearISO(d.amc.from);
+      d.taxEnabled = true; d.advance = 0; d.discount = 0; d.dueDate = ''; d.fromDoc = src.number;
+      syncAmcItems(d);
+    }
     if (src.type === 'quotation') Object.assign(d, { fromQuotation: src.number, fromQuotationId: src.id });
     if (src.type === 'order') {
       d.fromOrder = src.number;
@@ -1138,6 +1187,7 @@ function bindDocs() {
     if (actName === 'open') openDoc(clone(d));
     else if (actName === 'dup') { openDoc(copyAsNew(d, d.type), true); toast('Copy created – review and Save'); }
     else if (actName === 'convert') { openDoc(copyAsNew(d, 'invoice'), true); toast(`Invoice created from ${kindOf(d.type).lower} ${d.number} – review and Save`); }
+    else if (actName === 'amc') { openDoc(copyAsNew(d, 'amc'), true); toast(`AMC letter created from ${kindOf(d.type).lower} ${d.number} – review and Save`); }
     else if (actName === 'order') { openDoc(copyAsNew(d, 'order'), true); toast(`Order form created from quotation ${d.number} – review and Save`); }
   });
 
@@ -1239,7 +1289,7 @@ async function openSignedFile(fileId, name = '') {
 }
 
 /* ----- activity panel in the editor ----- */
-const ACTION_LABEL = { created: 'Created', status: 'Status changed', upload: 'Signed copy uploaded', payment: 'Payment received', 'payment-removed': 'Payment removed' };
+const ACTION_LABEL = { created: 'Created', status: 'Status changed', upload: 'Signed copy uploaded', payment: 'Payment received', 'payment-removed': 'Payment removed', reminder: 'AMC reminder sent' };
 function historyHTML(d) {
   const items = [...(d.history || [])].reverse();
   const sf = d.signedFile;
@@ -2000,6 +2050,7 @@ function showView(v) {
   $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
   if (v === 'docs') renderDocs();
   if (v === 'payments') renderPayments();
+  if (v === 'amc') { renderAmc(); renderAmcBanner(); }
   if (v === 'settings') {
     loadSettingsForm();
     if (teamContacts === null && API.online && USER) {
@@ -2341,6 +2392,7 @@ function startApp() {
   renderUserChip();
   showView('editor');
   if (!appStarted && document.fonts) document.fonts.ready.then(renderPreview);
+  renderAmcBanner();
   appStarted = true;
 }
 
@@ -2360,6 +2412,7 @@ async function init() {
   bindSettings();
   bindTeam();
   bindPayments();
+  bindAmc();
   bindLogin();
   bindUserMenu();
 

@@ -136,8 +136,18 @@ const DEFAULT_SETTINGS = {
   amcPercent: 10,
   amcMode: 'percent',   // 'percent' = % of the software price, 'amount' = fixed amount per year
   amcAmount: 0,
-  numbering: { quotation: 'DC-{BR}-QT-{YYYY}-{SEQ}', order: 'DC-{BR}-OF-{YYYY}-{SEQ}', invoice: 'DC-{BR}-INV-{YYYY}-{SEQ}', pad: 4 },
-  counters: { 'quotation-UAE': 1, 'quotation-IN': 1, 'order-UAE': 1, 'order-IN': 1, 'invoice-UAE': 1, 'invoice-IN': 1 },
+  numbering: { quotation: 'DC-{BR}-QT-{YYYY}-{SEQ}', order: 'DC-{BR}-OF-{YYYY}-{SEQ}', invoice: 'DC-{BR}-INV-{YYYY}-{SEQ}', amc: 'DC-{BR}-AMC-{YYYY}-{SEQ}', pad: 4 },
+  counters: { 'quotation-UAE': 1, 'quotation-IN': 1, 'order-UAE': 1, 'order-IN': 1, 'invoice-UAE': 1, 'invoice-IN': 1, 'amc-UAE': 1, 'amc-IN': 1 },
+  // the AMC reminder letter's wording (editable per letter too)
+  amcLetter: {
+    subject: 'Renewal of Annual Maintenance Contract',
+    salutation: 'Dear Sir / Madam,',
+    intro: 'We really appreciate you for being our valuable client.',
+    body: 'We would like to inform you that your A.M.C. period is coming to an end. It is our kind request to renew the A.M.C. by paying the relevant A.M.C. amount and continue to get the advantage of our prompt service support.',
+    advantages: ['Quick online service support', 'New updates free', 'Voucher printing customization free', 'In a critical situation we provide onsite service instead of online service'],
+    note: 'If the A.M.C. is not renewed, a service charge per visit will apply as per the visit location.',
+    closing: ['We ensure that you are satisfied with the services provided by us.', 'We look forward to serving your organization.']
+  },
   logo: null,
   stamp: null,
   terms: { quotation: QUOTATION_TERMS, order: ORDER_TERMS, invoice: INVOICE_TERMS },
@@ -165,13 +175,15 @@ const DEFAULT_SETTINGS = {
 const DOC_KINDS = {
   quotation: { title: 'Quotation', short: 'Quot', lower: 'quotation', plural: 'Quotations' },
   order: { title: 'Order Form', short: 'Order', lower: 'order form', plural: 'Order Forms' },
-  invoice: { title: 'Invoice', short: 'Inv', lower: 'invoice', plural: 'Invoices' }
+  invoice: { title: 'Invoice', short: 'Inv', lower: 'invoice', plural: 'Invoices' },
+  amc: { title: 'AMC Reminder', short: 'AMC', lower: 'AMC letter', plural: 'AMC Letters' }
 };
 const kindOf = t => DOC_KINDS[t] || DOC_KINDS.quotation;
 
 /** Default on/off switches for each kind of document. */
 function typeDefaults(t) {
   const q = t === 'quotation';
+  if (t === 'amc') return { showHardware: false, showVersion: false, showAcceptance: false, termsNewPage: false, showWords: true, showSupport: false, signEveryPage: false, showBank: true };
   return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice', signEveryPage: true, showBank: !q };
 }
 
@@ -210,7 +222,8 @@ const BRANCH_NAMES = { UAE: 'UAE (Dubai)', IN: 'India' };
 const STATUSES = {
   quotation: ['Draft', 'Sent', 'Accepted', 'Rejected'],
   order: ['Pending', 'Completed', 'Cancelled'],
-  invoice: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled']
+  invoice: ['Unpaid', 'Partially Paid', 'Paid', 'Cancelled'],
+  amc: ['Pending', 'Renewed', 'Not Renewed']   // Pending = letter sent, payment awaited; Renewed = paid, contract active
 };
 /** "just now", "2 hours ago", "yesterday", then the date. */
 function timeAgo(iso) {

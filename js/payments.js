@@ -20,12 +20,12 @@ function invoiceOf(order) {
   return docs.find(x => x.type === 'invoice' && x.status !== 'Cancelled' && (x.fromOrderId === order.id || (x.fromOrder && x.fromOrder === order.number && x.branch === order.branch)));
 }
 /** Money is owed on order forms and invoices that are not cancelled – except an order that already has its invoice. */
-const receivable = d => (d.type === 'order' || d.type === 'invoice') && d.status !== 'Cancelled' && !(d.type === 'order' && invoiceOf(d));
+const receivable = d => (d.type === 'order' || d.type === 'invoice' || d.type === 'amc') && d.status !== 'Cancelled' && d.status !== 'Not Renewed' && !(d.type === 'order' && invoiceOf(d));
 
 /** total / received / due of one document. An invoice marked Paid by hand counts as settled even without entries. */
 function payFigures(d) {
   const T = docTotals(d);
-  if (isPaidInvoice(d)) return { total: T.total, received: T.total, due: 0 };
+  if (isPaidInvoice(d) || (d.type === 'amc' && d.status === 'Renewed' && T.balance <= 0.004)) return { total: T.total, received: T.total, due: 0 };
   return { total: T.total, received: T.adv, due: Math.max(0, T.balance) };
 }
 
@@ -33,6 +33,7 @@ function payFigures(d) {
 function applyPaymentStatus(d) {
   const last = lastPayment(d);
   if (last) d.payment = { date: last.date, mode: last.mode, ref: last.ref };
+  if (d.type === 'amc') { const T = docTotals(d); if (T.total > 0 && T.balance <= 0.004) d.status = 'Renewed'; else if (d.status === 'Renewed') d.status = 'Pending'; return; }
   if (d.type !== 'invoice' || d.status === 'Cancelled') return;
   const T = docTotals(d);
   if (T.total > 0 && T.balance <= 0.004) d.status = 'Paid';
@@ -46,7 +47,7 @@ const inPayRegion = d => !payView.region || d.branch === payView.region;
 function partyList(within = inPayRegion) {
   const map = new Map();
   for (const d of docs) {
-    if (!within(d) || !(d.type === 'order' || d.type === 'invoice') || d.status === 'Cancelled') continue;
+    if (!within(d) || !(d.type === 'order' || d.type === 'invoice' || d.type === 'amc') || d.status === 'Cancelled' || d.status === 'Not Renewed') continue;
     const key = partyKey(d);
     if (!key) continue;
     let p = map.get(key);

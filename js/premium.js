@@ -64,14 +64,14 @@ function premiumHeader(d, S, first) {
   const [own, other] = headerContacts(d, S);
   const ct = (icon, label, value) => value
     ? `<div class="p-ct">${icon}<div><small>${esc(label)}</small><b>${esc(value)}</b></div></div>` : '';
-  const paid = isPaidInvoice(d) ? '<div class="p-paid">Paid</div>' : '';
+  const paid = isPaidInvoice(d) ? '<div class="p-paid">Paid</div>' : d.type === 'amc' && d.status === 'Renewed' ? '<div class="p-paid">Renewed</div>' : '';
   return `${P_STRIP_TOP}
     <div class="p-head">
       ${brand}
       <div class="p-doc">
         <div class="p-title-row">${paid}<div class="p-title">${title}</div></div>
         <div class="p-meta">
-          <span>${title} No.</span><b>${esc(d.number)}</b>
+          <span>${d.type === 'amc' ? 'Ref. No.' : `${title} No.`}</span><b>${esc(d.number)}</b>
           <span>Date</span><b>${esc(fmtDate(d.date))}</b>
           ${d.type !== 'quotation' && d.dueDate ? `<span>Due Date</span><b>${esc(fmtDate(d.dueDate))}</b>` : ''}
         </div>
@@ -97,6 +97,21 @@ function newPagePremium(d, S, index) {
   page.innerHTML = `<div class="pg-head">${premiumHeader(d, S, index === 0)}</div>${P_WATERMARK}
     <div class="pg-body${index === 0 ? ' first' : ''}"></div><div class="pg-foot">${signStripHTML(d, S)}${premiumFooter(d, S)}</div>`;
   return page;
+}
+
+/** The "Bank Details for Payment" block with a UPI QR for INR documents (invoices, order forms, AMC letters). */
+function bankBlockPremium(d, S) {
+  const bk = bankOf(S, d.branch);
+  const upi = upiLink(d, S);
+  const cur = d.currency, T = docTotals(d);
+  const kvb = (k, v) => (v ? `<span>${k}</span><b>${esc(v)}</b>` : '');
+  return `<div class="p-bank">
+      <div class="p-bank-info">
+        <div class="p-label">Bank Details for Payment</div>
+        <div class="p-kv2 two">${kvb('Account name', bk.accountName)}${kvb('Bank', bk.bankName)}${kvb('Account no.', bk.accountNo)}${kvb(bk.codeLabel, bk.code)}${kvb('SWIFT', bk.swift)}${kvb('Branch', bk.branchName)}${kvb('UPI ID', bk.upiId)}</div>
+      </div>
+      ${upi ? `<div class="p-bank-qr">${qrImg(upi, 'p-qr')}<b>Scan &amp; Pay</b><small>${esc(cur)} ${pMoney(Math.max(0, T.balance), cur)} via UPI</small></div>` : ''}
+    </div>`;
 }
 
 function buildBlocksPremium(d, S) {
@@ -203,18 +218,7 @@ function buildBlocksPremium(d, S) {
     </div>`);
 
   // Bank details for payment (+ UPI QR for INR documents)
-  if (printBank(d, S)) {
-    const bk = bankOf(S, d.branch);
-    const upi = upiLink(d, S);
-    const kvb = (k, v) => (v ? `<span>${k}</span><b>${esc(v)}</b>` : '');
-    add(`<div class="p-bank">
-        <div class="p-bank-info">
-          <div class="p-label">Bank Details for Payment</div>
-          <div class="p-kv2 two">${kvb('Account name', bk.accountName)}${kvb('Bank', bk.bankName)}${kvb('Account no.', bk.accountNo)}${kvb(bk.codeLabel, bk.code)}${kvb('SWIFT', bk.swift)}${kvb('Branch', bk.branchName)}${kvb('UPI ID', bk.upiId)}</div>
-        </div>
-        ${upi ? `<div class="p-bank-qr">${qrImg(upi, 'p-qr')}<b>Scan &amp; Pay</b><small>${esc(cur)} ${pMoney(Math.max(0, T.balance), cur)} via UPI</small></div>` : ''}
-      </div>`);
-  }
+  if (printBank(d, S)) add(bankBlockPremium(d, S));
 
   // Hardware configuration
   const hw = (d.hardware || []).filter(Boolean);

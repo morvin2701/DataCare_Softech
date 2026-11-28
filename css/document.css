@@ -616,3 +616,29 @@
 .page table.bank > tbody > tr > td { border: 1px solid var(--line); padding: 6px 10px; vertical-align: top; font-size: 13px; }
 .page table.bank-kv td { padding: 1px 10px 1px 0; font-size: 13px; }
 .page table.bank-kv td.k { color: #555; white-space: nowrap; }
+
+/* ===== AMC reminder letter (premium design) ===== */
+.tpl-premium .p-amc-letter { margin-top: 14px; font-size: 13px; color: var(--ink); line-height: 1.55; }
+.tpl-premium .p-amc-subject { display: flex; gap: 10px; align-items: baseline; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--hair); }
+.tpl-premium .p-amc-subject span { font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.tpl-premium .p-amc-subject b { font-family: Poppins, Arial, sans-serif; font-size: 13.5px; color: var(--navy); text-transform: uppercase; letter-spacing: .5px; }
+.tpl-premium .p-amc-dear { font-weight: 600; color: var(--navy); margin-bottom: 4px; }
+.tpl-premium .p-amc-letter p { margin: 0 0 6px; }
+.tpl-premium .p-amc-period { display: grid; grid-template-columns: auto auto auto auto; justify-content: start; column-gap: 12px; align-items: baseline; margin-top: 2px; }
+.tpl-premium .p-amc-period span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
+.tpl-premium .p-amc-period b { font-size: 15px; color: var(--navy); font-weight: 700; }
+.tpl-premium .p-amc-close { margin-top: 12px; font-size: 13px; line-height: 1.55; }
+.tpl-premium .p-amc-close p { margin: 0 0 4px; }
+.tpl-premium .p-amc-note { background: #FFF7E8; border-left: 3px solid var(--orange); padding: 7px 12px; border-radius: 0 8px 8px 0; margin-bottom: 8px; }
+.tpl-premium .p-amc-contact { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink); min-height: 96px; justify-content: center; }
+.tpl-premium .p-amc-contact b { font-size: 14px; color: var(--navy); }
+.tpl-premium .p-amc-contact span { color: var(--muted); }
+/* the AMC letter is one sheet: tighter blocks and a shorter signature box */
+.tpl-premium.doc-amc .p-amc-letter { margin-top: 10px; }
+.tpl-premium.doc-amc .p-sum { margin-top: 10px; }
+.tpl-premium.doc-amc .p-sec { margin: 12px 0 6px; }
+.tpl-premium.doc-amc .p-amc-close { margin-top: 8px; }
+.tpl-premium.doc-amc .p-bank { margin-top: 10px; }
+.tpl-premium.doc-amc .p-sign { margin-top: 12px; }
+.tpl-premium.doc-amc .p-sigbox { height: 58px; }
+.tpl-premium.doc-amc .p-amc-contact { min-height: 58px; }

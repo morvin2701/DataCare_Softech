@@ -936,3 +936,34 @@ a.icon-act { text-decoration: none; display: inline-grid; place-items: center; }
   .icon-act { width: 30px; height: 30px; }
   .list-foot { padding: 8px 14px; }
 }
+
+/* ===== AMC ===== */
+.seg4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.type-dot.amc { background: #1f8449; }
+.status-sel.s-Renewed { background-color: #e6f6ec; color: #1f7a42; }
+.status-sel.s-Not-Renewed { background-color: #fdecec; color: #a52f2f; }
+.status-pill.s-Renewed { background: #e6f6ec; color: #1f7a42; }
+.status-pill.s-Not-Renewed { background: #fdecec; color: #a52f2f; }
+.amc-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.amc-pill.ok { background: #e6f6ec; color: #1f7a42; }
+.amc-pill.warn { background: #fff7da; color: #8a6400; }
+.amc-pill.hot { background: #fff1e6; color: #b4561b; }
+.amc-pill.off { background: #fdecec; color: #a52f2f; }
+.amc-pill.done { background: #f1f3f7; color: #4a5366; }
+table.list tr.needs-reminder td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+.amc-banner { display: flex; align-items: center; gap: 10px; margin: 12px 28px 0; padding: 10px 14px; border-radius: 10px; background: #fff7da; color: #6b4e00; border: 1px solid #f3dd8e; font-size: 13.5px; }
+.amc-banner .ico { width: 18px; height: 18px; color: #b4561b; }
+.amc-banner b { color: #3b2a00; }
+.amc-banner .btn { margin-left: auto; }
+@media (max-width: 960px) {
+  .amc-banner { margin: 10px 14px 0; flex-wrap: wrap; }
+  .amc-banner .btn { margin-left: 0; width: 100%; justify-content: center; }
+  #amcTable tbody tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "party days" "lic lic" "period period" "amt status" "acts acts"; }
+  #amcTable td:nth-child(1) { grid-area: party; }
+  #amcTable td:nth-child(2) { grid-area: lic; }
+  #amcTable td:nth-child(3) { grid-area: period; font-size: 12.5px; }
+  #amcTable td:nth-child(4) { grid-area: days; justify-self: end; }
+  #amcTable td:nth-child(5) { grid-area: amt; text-align: left; }
+  #amcTable td:nth-child(6) { grid-area: status; justify-self: end; }
+  #amcTable td:nth-child(7) { grid-area: acts; }
+}

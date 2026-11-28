@@ -500,8 +500,8 @@ function brandedFor(S, branch) {
 
 function renderPages(d, S, container) {
   S = brandedFor(S, d.branch);
-  const premium = S.template !== 'classic';
-  const blocks = premium ? buildBlocksPremium(d, S) : buildBlocks(d, S);
+  const premium = S.template !== 'classic' || d.type === 'amc';   // the AMC letter exists in the premium design only
+  const blocks = d.type === 'amc' ? buildBlocksAmc(d, S) : premium ? buildBlocksPremium(d, S) : buildBlocks(d, S);
 
   /** Lays the blocks out. Returns false when a block that belongs on page 1 (preferFirst) did not fit there. */
   const layout = (tight, scale = 1) => {
@@ -569,7 +569,7 @@ function renderPages(d, S, container) {
   }
   // a page limit: no document is longer than 4 pages – tighter spacing first, then the content is drawn smaller
   // step by step until it fits (header, footer and signature lines keep their size)
-  const MAX_PAGES = { quotation: 4, order: 4 };   // invoices keep their natural length
+  const MAX_PAGES = { quotation: 4, order: 4, amc: 1 };   // invoices keep their natural length; the AMC letter is one sheet
   const max = MAX_PAGES[d.type];
   if (max && normal.pages > max) {
     let r = layout(true);
