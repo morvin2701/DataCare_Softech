@@ -582,7 +582,7 @@ function setType(t) {
   const { showWords, ...flags } = typeDefaults(t);   // amount in words is left as the user set it
   Object.assign(doc, { type: t, ...flags });
   if (!STATUSES[t].includes(doc.status)) doc.status = STATUSES[t][0];
-  if (t === 'amc') { ensureAmc(doc, S); if (!doc.amc.amount) doc.amc.amount = doc.amcMode === 'amount' ? Number(doc.amcAmount) || 0 : round2(doc.items.reduce((s, it) => s + (Number(it.amount) || 0), 0) * (Number(doc.amcPercent) || 0) / 100); doc.taxEnabled = true; doc.showWords = true; syncAmcItems(doc); }
+  if (t === 'amc') { ensureAmc(doc, S); if (!doc.amc.amount) doc.amc.amount = doc.amcMode === 'amount' ? Number(doc.amcAmount) || 0 : round2(doc.items.reduce((s, it) => s + (Number(it.amount) || 0), 0) * (Number(doc.amcPercent) || 0) / 100); doc.taxEnabled = true; doc.showWords = false; syncAmcItems(doc); }
   if (doc.autoNumber) { doc.numberAssigned = false; refreshAutoNumber(); }
 }
 

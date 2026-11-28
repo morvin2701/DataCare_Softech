@@ -85,7 +85,7 @@ function premiumHeader(d, S, first) {
     </div>`;
   return `${P_STRIP_TOP}
     ${head}
-    <div class="p-contacts${addr ? ' has-addr' : ''}"${addr ? ` style="--ct-cols:${(() => { const v = [own.phone, other.phone, S.website, S.email].filter(Boolean); return v.length === 4 && v.some(x => String(x).length > 24) ? 2 : v.length; })()}"` : ''}>
+    <div class="p-contacts${addr ? ' has-addr' : ''}"${addr ? ` style="--ct-cols:${(() => { const v = [own.phone, other.phone, S.website, S.email].filter(Boolean); return v.length === 4 && v.some(x => String(x).length > 20) ? 2 : v.length; })()}"` : ''}>
       ${ct(P_ICON.pin, `${own.label} Office`, own.phone)}
       ${ct(P_ICON.pin, `${other.label} Office`, other.phone)}
       ${ct(P_ICON.web, 'Website', S.website)}

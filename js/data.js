@@ -183,7 +183,7 @@ const kindOf = t => DOC_KINDS[t] || DOC_KINDS.quotation;
 /** Default on/off switches for each kind of document. */
 function typeDefaults(t) {
   const q = t === 'quotation';
-  if (t === 'amc') return { showHardware: false, showVersion: false, showAcceptance: false, termsNewPage: false, showWords: true, showSupport: false, signEveryPage: false, showBank: true };
+  if (t === 'amc') return { showHardware: false, showVersion: false, showAcceptance: false, termsNewPage: false, showWords: false, showSupport: false, signEveryPage: false, showBank: true };
   return { showHardware: true, showVersion: !q, showAcceptance: !q, termsNewPage: !q, showWords: !q, showSupport: t === 'invoice', signEveryPage: true, showBank: !q };
 }
 

@@ -85,9 +85,7 @@ function buildBlocksAmc(d, S) {
           ${a.licenseNo ? `<span>License No.</span><b>${esc(a.licenseNo)}</b>` : ''}
           ${a.installDate ? `<span>Install Date</span><b>${esc(fmtDate(a.installDate))}</b>` : ''}
           ${d.softwareVersion ? `<span>Software</span><b>${esc(d.softwareVersion)}${d.edition ? ' ' + esc(d.edition) : ''}</b>` : ''}
-          <span>AMC Period</span><b>${esc(fmtDate(a.from))} – ${esc(fmtDate(a.to))}</b>
-          <span>Financial Year</span><b>${esc(fyLabel(a.from))}</b>
-          ${who ? `<span>Contact</span><b>${esc(who)}${mobile ? ` · ${esc(mobile)}` : ''}</b>` : ''}
+          <span>AMC Period</span><b>${esc(fmtDate(a.from))} – ${esc(fmtDate(a.to))} <span class="p-fy">(FY ${esc(fyLabel(a.from))})</span></b>
           ${d.status === 'Renewed' ? `<span>Status</span><b>Renewed ✓</b>` : ''}
         </div>
       </div>
@@ -116,7 +114,7 @@ function buildBlocksAmc(d, S) {
       <div class="p-words">
         <div class="p-label">Duration of A.M.C. · Financial Year ${esc(fyLabel(a.from))}</div>
         <div class="p-amc-period"><span>From</span><b>${esc(fmtDate(a.from))}</b><span>To</span><b>${esc(fmtDate(a.to))}</b></div>
-        ${d.showWords !== false ? `<div class="p-label mt">Amount in Words</div><div class="p-words-t">${esc(amountInWords(settled ? T.total : (T.adv ? T.balance : T.total), cur))}</div>` : ''}
+        ${d.showWords ? `<div class="p-label mt">Amount in Words</div><div class="p-words-t">${esc(amountInWords(settled ? T.total : (T.adv ? T.balance : T.total), cur))}</div>` : ''}
       </div>
       <div class="p-totals">${tot}</div>
     </div>`);
@@ -139,13 +137,13 @@ function buildBlocksAmc(d, S) {
   add(`<div class="p-sign p-amc-sign">
       <div class="p-sigcard">
         <div class="p-label">If any issue, contact our team</div>
-        <div class="p-amc-contact">${who ? `<b>${esc(who)}</b>` : ''}${mobile ? `<span>Mo.: ${esc(mobile)}</span>` : ''}${supportRowsOf(S, d.branch).slice(0, 2).map(r => `<span>${esc(r.label)}: ${esc(r.value)}</span>`).join('')}</div>
+        <div class="p-amc-contact">${who ? `<b>${esc(who)}</b>` : ''}${mobile ? `<span>Mo.: ${esc(mobile)}</span>` : ''}${supportRowsOf(S, d.branch).slice(0, 1).map(r => `<span>${esc(r.label)}: ${esc(r.value)}</span>`).join('')}</div>
       </div>
       <div class="p-sigcard">
         <div class="p-label">For ${esc(S.legalName)}</div>
         <div class="p-sigbox">${stamp}</div>
         <div class="p-sigline"></div>
-        <div class="p-sigcap"><b>Authorised Signatory</b><small>Thanking you,&nbsp; ${esc(S.companyName || S.legalName)}</small></div>
+        <div class="p-sigcap"><b>Authorised Signatory</b><small>Thanking you</small></div>
       </div>
     </div>`, { cls: 'has-sign' });
   return blocks;

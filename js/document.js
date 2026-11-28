@@ -574,7 +574,7 @@ function renderPages(d, S, container) {
   const max = MAX_PAGES[d.type];
   if (max && normal.pages > max) {
     let r = layout(true);
-    for (const s of [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5]) { if (r.pages <= max) break; r = layout(true, s); }
+    for (const s of [0.98, 0.96, 0.94, 0.92, 0.9, 0.87, 0.84, 0.8, 0.76, 0.72, 0.68, 0.64, 0.6, 0.55, 0.5]) { if (r.pages <= max) break; r = layout(true, s); }
   }
 
   const pages = container.querySelectorAll('.page');
