@@ -914,3 +914,25 @@ a.icon-act { text-decoration: none; display: inline-grid; place-items: center; }
 }
 .branch-sub { margin: 16px 0 8px; font-size: 12.5px; font-weight: 700; color: var(--brand-dark); }
 .branch-sub small { font-weight: 500; color: var(--muted); }
+
+/* ===== desktop: lists use the full width and sit tighter, so less scrolling ===== */
+@media (min-width: 961px) {
+  .docs-panel { max-width: none; }
+  .panel { padding: 18px 28px 48px; }
+  .page-head { margin-bottom: 14px; }
+  .page-head h2 { font-size: 22px; }
+  .region-bar { margin-bottom: 12px; }
+  .stats { gap: 12px; margin-bottom: 14px; }
+  .stat { padding: 11px 15px; gap: 12px; }
+  .stat-ic { width: 36px; height: 36px; }
+  .stat-v { font-size: 20px; }
+  .stat-s { margin-top: 2px; }
+  .list-toolbar { padding: 9px 14px; }
+  table.list th { padding: 8px 14px; }
+  table.list td { padding: 7px 14px; }
+  table.list { font-size: 13px; }
+  .cell-sub { margin-top: 1px; }
+  .status-sel { padding: 3px 24px 3px 10px; font-size: 12px; }
+  .icon-act { width: 30px; height: 30px; }
+  .list-foot { padding: 8px 14px; }
+}
