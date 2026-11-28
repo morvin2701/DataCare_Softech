@@ -656,7 +656,6 @@
 .tpl-premium .p-head.amc { align-items: stretch; }
 .tpl-premium .p-hcol { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-width: 0; }
 .tpl-premium .p-hcol.right { align-items: flex-end; text-align: right; }
-.tpl-premium .p-head.amc .p-title { font-size: 28px; letter-spacing: 5px; white-space: nowrap; }
 .tpl-premium .p-head.amc .p-meta { margin-top: 0; }
 .tpl-premium .p-meta.left { justify-content: start; text-align: left; }
 .tpl-premium .p-meta.left span, .tpl-premium .p-meta.left b { text-align: left; }
