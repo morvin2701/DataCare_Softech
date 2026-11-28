@@ -651,3 +651,12 @@
 .page .addr-line { font-size: 10.5px; color: #555; text-align: center; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .page.has-addr .pg-body { top: 182px; }   /* classic: the address line under the header needs a little more room */
 .page .foot-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* classic footer stays one line */
+
+/* AMC letter header: two columns whose bottoms line up – Ref. No. under the brand, Date under the title */
+.tpl-premium .p-head.amc { align-items: stretch; }
+.tpl-premium .p-hcol { display: flex; flex-direction: column; justify-content: space-between; gap: 8px; min-width: 0; }
+.tpl-premium .p-hcol.right { align-items: flex-end; text-align: right; }
+.tpl-premium .p-head.amc .p-title { font-size: 28px; letter-spacing: 5px; white-space: nowrap; }
+.tpl-premium .p-head.amc .p-meta { margin-top: 0; }
+.tpl-premium .p-meta.left { justify-content: start; text-align: left; }
+.tpl-premium .p-meta.left span, .tpl-premium .p-meta.left b { text-align: left; }

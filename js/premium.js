@@ -66,18 +66,25 @@ function premiumHeader(d, S, first) {
   const ct = (icon, label, value) => value
     ? `<div class="p-ct">${icon}<div><small>${esc(label)}</small><b>${esc(value)}</b></div></div>` : '';
   const paid = isPaidInvoice(d) ? '<div class="p-paid">Paid</div>' : d.type === 'amc' && d.status === 'Renewed' ? '<div class="p-paid">Renewed</div>' : '';
-  return `${P_STRIP_TOP}
-    <div class="p-head">
+  // the AMC letter: reference number under the brand on the left, date under the title on the right, both on one line
+  const head = d.type === 'amc'
+    ? `<div class="p-head amc">
+      <div class="p-hcol">${brand}<div class="p-meta left"><span>Ref. No.</span><b>${esc(d.number)}</b></div></div>
+      <div class="p-hcol right"><div class="p-title-row">${paid}<div class="p-title">${title}</div></div><div class="p-meta"><span>Date</span><b>${esc(fmtDate(d.date))}</b></div></div>
+    </div>`
+    : `<div class="p-head">
       ${brand}
       <div class="p-doc">
         <div class="p-title-row">${paid}<div class="p-title">${title}</div></div>
         <div class="p-meta">
-          <span>${d.type === 'amc' ? 'Ref. No.' : `${title} No.`}</span><b>${esc(d.number)}</b>
+          <span>${title} No.</span><b>${esc(d.number)}</b>
           <span>Date</span><b>${esc(fmtDate(d.date))}</b>
           ${d.type !== 'quotation' && d.dueDate ? `<span>Due Date</span><b>${esc(fmtDate(d.dueDate))}</b>` : ''}
         </div>
       </div>
-    </div>
+    </div>`;
+  return `${P_STRIP_TOP}
+    ${head}
     <div class="p-contacts">
       ${ct(P_ICON.pin, `${own.label} Office`, own.phone)}
       ${ct(P_ICON.pin, `${other.label} Office`, other.phone)}
@@ -320,7 +327,7 @@ function fitContacts(page) {
   const pr = page.getBoundingClientRect();
   const z = pr.width / 794 || 1;
   const px = v => Math.ceil(v / z);
-  const headEls = [...page.querySelectorAll('.p-head .p-brand, .p-head .p-logo-full, .p-head .p-doc')];
+  const headEls = [...page.querySelectorAll('.p-head .p-brand, .p-head .p-logo-full, .p-head .p-doc, .p-head .p-hcol')];
   const headBottom = headEls.length ? px(Math.max(...headEls.map(el => el.getBoundingClientRect().bottom)) - pr.top) : 0;
   let top = parseFloat(getComputedStyle(bar).top) || 136;
   if (headBottom + 8 > top) { top = headBottom + 8; bar.style.top = top + 'px'; }
