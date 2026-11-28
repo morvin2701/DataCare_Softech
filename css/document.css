@@ -640,5 +640,6 @@
 .tpl-premium.doc-amc .p-amc-close { margin-top: 8px; }
 .tpl-premium.doc-amc .p-bank { margin-top: 10px; }
 .tpl-premium.doc-amc .p-sign { margin-top: 12px; }
-.tpl-premium.doc-amc .p-sigbox { height: 58px; }
-.tpl-premium.doc-amc .p-amc-contact { min-height: 58px; }
+.tpl-premium.doc-amc .p-sigbox { height: 74px; overflow: hidden; }
+.tpl-premium.doc-amc .p-sigbox .p-stamp-img { height: 70px; max-height: 70px; width: auto; max-width: 160px; }
+.tpl-premium.doc-amc .p-amc-contact { min-height: 74px; }
