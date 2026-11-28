@@ -53,9 +53,9 @@ function premiumHeader(d, S, first) {
   const title = kindOf(d.type).title;
   const addr = first ? String(((S.branches || {})[d.branch] || {}).address || '').trim() : '';   // the issuing branch's office address
   const brand = S.logo && S.logoHasName
-    ? `<div class="p-brand-col"><img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">${addr ? `<div class="p-addr">${esc(addr)}</div>` : ''}</div>`
+    ? `<img class="p-logo-full${first ? '' : ' sm'}" src="${S.logo}" alt="">`
     : `<div class="p-brand">${brandMark(S, first ? 64 : 36)}
-         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(headerTagline(S))}</div>` : ''}${addr ? `<div class="p-addr">${esc(addr)}</div>` : ''}</div>
+         <div><div class="p-name">${brandName(S)}</div>${first ? `<div class="p-legal">${esc(headerTagline(S))}</div>` : ''}</div>
        </div>`;
 
   if (!first) {
@@ -83,7 +83,8 @@ function premiumHeader(d, S, first) {
       ${ct(P_ICON.pin, `${other.label} Office`, other.phone)}
       ${ct(P_ICON.web, 'Website', S.website)}
       ${ct(P_ICON.mail, 'Email', S.email)}
-    </div>`;
+    </div>
+    ${addr ? `<div class="p-addrbar">${P_ICON.pin}<span>${esc(addr)}</span></div>` : ''}`;
 }
 
 function premiumFooter(d, S) {
@@ -314,6 +315,20 @@ function fitContacts(page) {
     bar.classList.add('two-rows');
     page.classList.add('ct2');
   }
+  // the brand and the document meta (number, date, due date) must end above the bar; the bar, the address line and
+  // the first page's body are pushed down by whatever that needs (measured in page pixels, so the zoomed preview is fine)
+  const pr = page.getBoundingClientRect();
+  const z = pr.width / 794 || 1;
+  const px = v => Math.ceil(v / z);
+  const headEls = [...page.querySelectorAll('.p-head .p-brand, .p-head .p-logo-full, .p-head .p-doc')];
+  const headBottom = headEls.length ? px(Math.max(...headEls.map(el => el.getBoundingClientRect().bottom)) - pr.top) : 0;
+  let top = parseFloat(getComputedStyle(bar).top) || 136;
+  if (headBottom + 8 > top) { top = headBottom + 8; bar.style.top = top + 'px'; }
+  let bottom = top + px(bar.getBoundingClientRect().height);
+  const addr = page.querySelector('.p-addrbar');
+  if (addr) { addr.style.top = (bottom + 4) + 'px'; bottom = bottom + 4 + px(addr.getBoundingClientRect().height); }
+  const body = page.querySelector('.pg-body.first');
+  if (body) body.style.top = (bottom + 14) + 'px';
 }
 
 /** Version comparison list, attached on new page(s) at the end of the document. */
